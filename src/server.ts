@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { handle } from './core/handle.ts';
+import { handle, resolveClientIp } from './core/handle.ts';
 import type { Alert, Trap } from './core/types.ts';
 import { createDispatcher, notifiersFromEnv } from './notify/index.ts';
 import { appendAlert, readRegistry } from './store.ts';
@@ -9,6 +9,11 @@ export interface ServeOptions {
   host?: string;
   port?: number;
   cooldownMs?: number;
+  /**
+   * Header that carries the real client address when a reverse proxy or tunnel you control sits in
+   * front (x-forwarded-for, cf-connecting-ip, x-real-ip). Unset, the TCP peer is the client.
+   */
+  trustProxy?: string;
   /** Replaces the default pipeline (alerts.jsonl + cooldown + env-configured notifiers). */
   onAlert?: (alert: Alert) => void | Promise<void>;
 }
@@ -27,10 +32,11 @@ export function serve(opts: ServeOptions): Promise<http.Server> {
 
   const server = http.createServer(async (req, res) => {
     try {
-      const response = await handle(await toRequest(req), {
+      const request = await toRequest(req);
+      const response = await handle(request, {
         traps: () => loadTraps(opts.home),
         onAlert: (alert) => void Promise.resolve(onAlert(alert)).catch((err) => console.error('[honeytoken] alert failed:', err)),
-        clientIp: req.socket.remoteAddress ?? '',
+        clientIp: resolveClientIp(request.headers, req.socket.remoteAddress ?? '', opts.trustProxy),
       });
       res.writeHead(response.status, Object.fromEntries(response.headers));
       res.end(Buffer.from(await response.arrayBuffer()));

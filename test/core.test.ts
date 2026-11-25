@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { formatAlert, generateTrap, handle, trapsIn, type Alert, type Trap } from '../src/core/index.ts';
+import { formatAlert, generateTrap, handle, resolveClientIp, trapsIn, type Alert, type Trap } from '../src/core/index.ts';
 
 const trap = (over: Partial<Trap> = {}): Trap => ({
   ...generateTrap({ baseUrl: 'https://hooks.example.com', label: 'billing key' }),
@@ -41,6 +41,16 @@ test('generateTrap follows the requested style and rejects bad input', () => {
   assert.throws(() => generateTrap({ baseUrl: 'http://x', pathPrefix: '/../etc' }));
   assert.throws(() => generateTrap({ baseUrl: 'http://x', tokenLength: 8 }));
   assert.throws(() => generateTrap({ baseUrl: 'http://x', tokenPrefix: 'a b' }));
+  assert.throws(() => generateTrap({ baseUrl: 'javascript:alert(1)' }), /http\(s\)/);
+  assert.throws(() => generateTrap({ baseUrl: 'ftp://hooks.example.com' }), /http\(s\)/);
+});
+
+test('resolveClientIp trusts a proxy header only when told to', () => {
+  const h = new Headers({ 'x-forwarded-for': '6.6.6.6, 203.0.113.47', 'cf-connecting-ip': '198.51.100.9' });
+  assert.equal(resolveClientIp(h, '127.0.0.1'), '127.0.0.1', 'untrusted by default: the header is forgeable');
+  assert.equal(resolveClientIp(h, '127.0.0.1', 'x-forwarded-for'), '203.0.113.47', 'the hop our proxy appended, not the forged left part');
+  assert.equal(resolveClientIp(h, '127.0.0.1', 'CF-Connecting-IP'), '198.51.100.9');
+  assert.equal(resolveClientIp(new Headers(), '127.0.0.1', 'x-forwarded-for'), '127.0.0.1', 'request that bypassed the proxy');
 });
 
 test('random parts use the whole alphabet', () => {

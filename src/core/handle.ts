@@ -68,6 +68,20 @@ export async function handle(req: Request, opts: HandleOptions): Promise<Respons
     : Response.json({ error: 'not_found' }, { status: 404 });
 }
 
+/**
+ * The client address. Behind a reverse proxy or tunnel the peer is always the proxy, which
+ * would make every intruder look like one address (and share one cooldown). Trust a header
+ * only when a proxy you control sets it; otherwise anyone can forge it.
+ */
+export function resolveClientIp(headers: Headers, peer: string, trustHeader?: string): string {
+  if (!trustHeader) return peer;
+  const value = headers.get(trustHeader);
+  if (!value) return peer;
+  // A proxy appends the address it saw to X-Forwarded-For; everything left of it came from the client.
+  const ip = trustHeader.toLowerCase() === 'x-forwarded-for' ? value.split(',').pop() : value;
+  return ip?.trim() || peer;
+}
+
 function clip(value: string | null | undefined): string | undefined {
   if (value == null) return undefined;
   const flat = value.replace(/[\r\n]+/g, ' ');

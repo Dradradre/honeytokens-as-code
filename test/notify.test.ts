@@ -25,7 +25,7 @@ function fakeFetch(status = 200) {
   return { calls, impl };
 }
 
-test('cooldown: one alert per trap and address, then a count of what was held back', async () => {
+test('cooldown: one alert per trap and address; the next alert on the trap counts what was held back', async () => {
   let clock = 0;
   const sent: Alert[] = [];
   const logged: Alert[] = [];
@@ -47,10 +47,25 @@ test('cooldown: one alert per trap and address, then a count of what was held ba
   assert.equal(logged.length, 6, 'every hit is logged');
   assert.deepEqual(sent.map((a) => [a.clientIp, a.status, a.suppressed]), [
     ['203.0.113.47', 'active', undefined],
-    ['198.51.100.9', 'active', undefined],
+    ['198.51.100.9', 'active', 2], // the two repeats from .47, reported on the trap's next alert
     ['203.0.113.47', 'retired', undefined],
-    ['203.0.113.47', 'active', 2],
+    ['203.0.113.47', 'active', undefined],
   ]);
+});
+
+test('per-trap cap: an intruder rotating addresses cannot flood the channels', async () => {
+  let clock = 0;
+  const sent: Alert[] = [];
+  const dispatch = createDispatcher({ notifiers: [async (a) => void sent.push(a)], cooldownMs: 1000, maxPerTrap: 3, now: () => clock });
+
+  for (let i = 0; i < 20_000; i++) await dispatch(alert({ clientIp: `2001:db8::${i.toString(16)}` }));
+  assert.equal(sent.length, 3);
+  await dispatch(alert({ trapId: 'another-trap', clientIp: '2001:db8::1' }));
+  assert.equal(sent.length, 4, 'other traps keep their own budget');
+
+  clock = 1000;
+  await dispatch(alert({ clientIp: '203.0.113.99' }));
+  assert.equal(sent.at(-1)?.suppressed, 19_997, 'the next alert reports everything held back');
 });
 
 test('a failing notifier does not stop the others', async () => {

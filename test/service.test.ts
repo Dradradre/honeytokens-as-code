@@ -5,7 +5,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 import { createService } from '../src/service.ts';
-import { appendAlert, readRegistry } from '../src/store.ts';
+import { appendAlert, readAlerts, readRegistry } from '../src/store.ts';
+import type { Alert } from '../src/core/types.ts';
 import { sandbox } from './helpers.ts';
 
 test('nothing but the decoy is written into the repo', () => {
@@ -45,7 +46,9 @@ test('register finds the lines itself and refuses what is not planted or outside
   write('README.md', 'nothing here\n');
   assert.throws(() => service.register(id, 'README.md'), /not found/);
   fs.writeFileSync(path.join(root, 'outside.env'), token);
-  assert.throws(() => service.register(id, '../outside.env'), /outside the repository/);
+  assert.throws(() => service.register(id, '../outside.env'), /not inside a git repository/);
+  write('.git/config', token);
+  assert.throws(() => service.register(id, '.git/config'), /inside \.git/);
 
   assert.deepEqual(service.list()[0]?.plantedIn, ['acme-payments/deploy/legacy/billing.env:2,3']);
   assert.ok(!JSON.stringify(service.list()).includes(token), 'list never returns tokens');
@@ -57,6 +60,59 @@ test('register resolves paths from a subdirectory to the repo root', () => {
   write('infra/old/values.yaml', `apiKey: ${token}\n`);
   const fromSubdir = createService({ home, cwd: path.join(repo, 'infra') });
   assert.deepEqual(fromSubdir.register(id, 'old/values.yaml').map((p) => p.file), ['infra/old/values.yaml']);
+});
+
+test('register refuses a symlink that leads outside the repository', () => {
+  const { repo, root, service } = sandbox();
+  const { id, token } = service.issue({});
+  const outside = path.join(root, 'outside.conf');
+  fs.writeFileSync(outside, `important=1\nkey=${token}\n`);
+  fs.symlinkSync(outside, path.join(repo, 'link.env'));
+  fs.symlinkSync(root, path.join(repo, 'linkdir'));
+
+  assert.throws(() => service.register(id, 'link.env'), /resolves outside .* through a symlink/);
+  assert.throws(() => service.register(id, 'linkdir/outside.conf'), /resolves outside .* through a symlink/);
+  assert.equal(fs.readFileSync(outside, 'utf8'), `important=1\nkey=${token}\n`);
+});
+
+test('clean refuses a planted file that was swapped for an outside symlink', () => {
+  const { repo, root, write, service } = sandbox();
+  const { id, token } = service.issue({});
+  write('old.env', `K=${token}\n`);
+  service.register(id, 'old.env');
+
+  const outside = path.join(root, 'outside.conf');
+  fs.writeFileSync(outside, `important=1\nkey=${token}\n`);
+  fs.rmSync(path.join(repo, 'old.env'));
+  fs.symlinkSync(outside, path.join(repo, 'old.env'));
+
+  assert.deepEqual(service.clean([id])[0]?.refused, ['acme-payments/old.env']);
+  assert.equal(fs.readFileSync(outside, 'utf8'), `important=1\nkey=${token}\n`, 'outside file untouched');
+});
+
+test('register finds the repo from the file, whatever directory the server started in', () => {
+  const { repo, root, home, write } = sandbox('http://x');
+  const elsewhere = createService({ home, cwd: root, baseUrl: 'http://x' }); // like an MCP server started in $HOME
+  const { id, token } = elsewhere.issue({});
+  write('deploy/legacy/billing.env', `KEY=${token}\n`);
+  const [placement] = elsewhere.register(id, path.join(repo, 'deploy/legacy/billing.env'));
+  assert.equal(placement?.file, path.join('deploy', 'legacy', 'billing.env'));
+  assert.equal(placement?.repo, fs.realpathSync(repo));
+});
+
+test('a trap that was never planted is deleted, not retired', () => {
+  const { write, service } = sandbox();
+  const planted = service.issue({});
+  const stray = service.issue({});
+  write('old.env', `K=${planted.token}\n`);
+  service.register(planted.id, 'old.env');
+
+  assert.equal(service.clean([stray.id], { dryRun: true })[0]?.forgotten, true);
+  assert.equal(service.list({ includeRetired: true }).length, 2, 'dry run deletes nothing');
+
+  const results = service.clean('all');
+  assert.deepEqual(results.map((r) => [r.id, r.forgotten]), [[planted.id, false], [stray.id, true]]);
+  assert.deepEqual(service.list({ includeRetired: true }).map((t) => [t.id, t.status]), [[planted.id, 'retired']]);
 });
 
 test('clean removes only trap lines, retires the trap, and keeps it on record', () => {
@@ -99,6 +155,27 @@ test('alerts returns the latest entries from alerts.jsonl', () => {
     appendAlert(home, { trapId: `t${i}`, label: '', status: 'active', matched: ['url'], plantedIn: [], method: 'GET', path: '/', clientIp: '', at: '' });
   }
   assert.deepEqual(service.alerts(2).map((a) => a.trapId), ['t3', 't4']);
+});
+
+const hit = (trapId: string): Alert => ({
+  trapId, label: '', status: 'active', matched: ['url'], plantedIn: [], method: 'GET', path: '/', clientIp: '', at: '',
+});
+
+test('the alert log rotates instead of filling the disk, and reads across both files', () => {
+  const { home } = sandbox();
+  for (let i = 0; i < 30; i++) appendAlert(home, hit(`t${i}`), 1000);
+  const files = fs.readdirSync(home).filter((f) => f.startsWith('alerts')).sort();
+  assert.deepEqual(files, ['alerts.1.jsonl', 'alerts.jsonl']);
+  for (const f of files) assert.ok(fs.statSync(path.join(home, f)).size < 1200, `${f} stays near the cap`);
+  assert.deepEqual(readAlerts(home, 3).map((a) => a.trapId), ['t27', 't28', 't29']);
+  assert.ok(readAlerts(home, 1000).length > 3, 'rotated entries are still readable');
+});
+
+test('a half-written log line does not break reading', () => {
+  const { home } = sandbox();
+  appendAlert(home, hit('first'));
+  fs.appendFileSync(path.join(home, 'alerts.jsonl'), '{"trapId":"second","lab');
+  assert.deepEqual(readAlerts(home, 10).map((a) => a.trapId), ['first']);
 });
 
 test('concurrent writers from separate processes never lose a trap', async () => {

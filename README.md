@@ -152,7 +152,11 @@ The trap URL is baked in when the trap is created, so set `HONEYTOKEN_BASE_URL` 
 - **Local (default):** `http://127.0.0.1:8787`. Good for trying it out; only fires on your machine.
 - **For real:** run `honeytoken serve --host 0.0.0.0` behind something the internet can reach (a small VPS, a
   reverse proxy, a tunnel), give it a copy of `~/.honeytoken/registry.json`, and set `HONEYTOKEN_BASE_URL` to
-  that public URL. Use a hostname that looks
+  that public URL.
+- **Behind a proxy or tunnel,** tell the server which header holds the real client address, or every intruder
+  shows up as your proxy and shares one cooldown: `--trust-proxy x-forwarded-for` behind a single nginx or Caddy,
+  `--trust-proxy cf-connecting-ip` behind Cloudflare. Without the flag the header is ignored, because anyone
+  can forge it. Use a hostname that looks
   like it belongs to you, e.g. `https://hooks.acme-internal.dev`. A decoy pointing at `ngrok-free.app` fools
   nobody.
 
@@ -176,7 +180,7 @@ Extra lines appear when they matter:
 |---|---|
 | `(retired trap)` + `note: this trap was cleaned up, so an old copy of the repo is in use` | The hit came through a trap you already removed: someone is working from history or an old clone |
 | `likely: Slack link preview (link previews fetch URLs on their own)` | The user agent belongs to Slack, Discord, Teams, X, LinkedIn, WhatsApp, GitHub's image proxy or a search crawler |
-| `suppressed: 41 more hits from this address since the last alert` | The cooldown (default 10 min per trap and address) held back repeats. All of them are still in `alerts.jsonl` |
+| `suppressed: 41 more hits on this trap since the last alert` | Flood control held back repeats: one alert per trap and address per 10 min, and at most 5 per trap per 10 min however many addresses. Every hit is still in `alerts.jsonl` |
 
 **What fires a trap**
 
@@ -198,7 +202,8 @@ A honeytoken tool that gives itself away is worse than none. These are enforced 
 |---|---|
 | 🏠 **Nothing but the decoy touches your repo** | The map of every trap lives in `~/.honeytoken`, not in the repo: no lock file, no ignore entry (a committed ignore line would itself say "there are honeytokens here"), and `git clean` can't wipe it. The skill installs to `~/.claude/skills`, and `claude mcp add` uses local scope. |
 | 🧭 **The agent can't pick the alert host** | The base URL comes only from `HONEYTOKEN_BASE_URL` or the CLI. A model that invents a convincing domain would build a trap that never fires. |
-| 🔍 **Placements are verified, not trusted** | `register_planted_token` reads the file and finds the lines itself. It refuses unplanted traps and paths outside the repo. |
+| 🔍 **Placements are verified, not trusted** | `register_planted_token` reads the file and finds the lines itself. It refuses unplanted traps, files outside a git repository or inside `.git`, and symlinks that lead out of the repo. `clean` checks the real path again before it writes. |
+| 🌊 **Floods stay small** | One alert per trap and address per cooldown, at most 5 per trap however many addresses an intruder rotates through, and an alert log that rotates at 10 MB. |
 | 🧨 **Request data is treated as hostile** | Attacker-supplied path and user agent are clipped and kept inside code spans; Slack text is escaped and Discord mentions are disabled, so nobody gets `@everyone`'d through your alert. |
 | 🥱 **The server is boring on purpose** | Hits get `401 {"error":"unauthorized"}` like any API rejecting a key. No banner, no version, no health endpoint. |
 | 🪦 **Cleaning retires, it doesn't forget** | Removed traps keep alerting. The decoy lives on in git history and every clone made before the cleanup, and that is exactly the leak you want to hear about. |
@@ -261,9 +266,9 @@ export default {
 | Tool | Input | Returns |
 |---|---|---|
 | `create_webhook_trap` | `label?`, `pathPrefix?` (default `/v1/hooks`), `tokenPrefix?` (≤ 32 of `[A-Za-z0-9._-]`), `tokenLength?` (16–128, default 32), `tokenCharset?` (`alnum` \| `hex`) | `id`, `url`, `token`, `next`, and `warning` when no base URL is set |
-| `register_planted_token` | `id`, `file` (repo-relative), `line?` (an assertion, not a hint) | the placements found |
+| `register_planted_token` | `id`, `file` (absolute path preferred), `line?` (an assertion, not a hint) | the placements found |
 | `list_traps` | `includeRetired?` | id, label, status, url, createdAt, `repo/file:lines`. No tokens. |
-| `clean_traps` | `ids` **or** `all: true`, `dryRun?` | per trap: lines removed per file, recorded files now missing. Traps become `retired` and keep alerting |
+| `clean_traps` | `ids` **or** `all: true`, `dryRun?` | per trap: lines removed per file, `missing` and `refused` files, `forgotten`. Planted traps become `retired` and keep alerting; never-planted ones are deleted |
 | `list_alerts` | `limit?` (1–200, default 20) | recent hits, oldest first, with an explicit "attacker-controlled" notice |
 
 </details>
@@ -279,9 +284,10 @@ honeytoken register <id> <file> [--line n]
 honeytoken list            [--all] [--json]
 honeytoken clean <id...> | --all  [--dry-run]
 honeytoken alerts          [--limit 20] [--json]
-honeytoken serve           [--host 127.0.0.1] [--port 8787] [--cooldown 600]
+honeytoken serve           [--host 127.0.0.1] [--port 8787] [--cooldown 600] [--trust-proxy <header>]
 honeytoken mcp
 honeytoken install-skill   [--dir ~/.claude/skills]
+honeytoken --version
 
 global: --home <path>      (env HONEYTOKEN_HOME, default ~/.honeytoken)
 ```
@@ -330,9 +336,21 @@ global: --home <path>      (env HONEYTOKEN_HOME, default ~/.honeytoken)
 
 Written under a lock, atomically, with mode `0600`. Back the directory up somewhere private; without it,
 `clean` can't find your traps. The alert server re-reads it on every request, so new traps are live without a
-restart. Every hit is appended to `alerts.jsonl` next to it.
+restart. Every hit is appended to `alerts.jsonl` next to it; at 10 MB that file becomes `alerts.1.jsonl` and a
+new one starts.
 
 </details>
+
+<br>
+
+## Threat model
+
+| Scenario | Caught? |
+|---|---|
+| The repo leaks (public by mistake, stolen CI token, cloned by a contractor) and someone tries what they find | ✅ That is what this is for |
+| Someone works from an old clone or from git history after you cleaned up | ✅ Retired traps keep alerting |
+| The alert server is compromised | ❌ Its hostname gives away every URL decoy that points at it. Keep it a box that does nothing else |
+| **Your own machine is compromised** | ⚠️ Only if the intruder doesn't look first. `~/.honeytoken/registry.json` lists every decoy, and your coding agent's transcripts contain the tokens it was handed. Traps catch people who grep the repo, not people who read your home directory |
 
 <br>
 
@@ -341,6 +359,7 @@ restart. Every hit is appended to `alerts.jsonl` next to it.
 - **Webhook traps only.** No AWS / GCP / database credential canaries yet.
 - **You host the alert server.** If it is down, hits are lost.
 - **`list_alerts` reads the local log.** If the alert server runs on another machine, its `alerts.jsonl` is there.
+- **A deliberate flood can rotate old log entries out.** Alerts already sent to Slack or Discord are unaffected.
 - **`clean` deletes whole lines.** That is why the playbook keeps every decoy on its own line. Comments the
   agent wrote above a decoy are left for the agent to tidy.
 - **The agent is only as careful as the playbook.** Review the diff before you commit it.

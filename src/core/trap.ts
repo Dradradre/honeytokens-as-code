@@ -52,6 +52,9 @@ export function generateTrap(opts: TrapOptions): Trap {
   }
 
   const base = new URL(opts.baseUrl); // throws on garbage input
+  if (base.protocol !== 'http:' && base.protocol !== 'https:') {
+    throw new Error(`baseUrl must be http(s), got ${base.protocol}`);
+  }
   const id = randomString(CHARSETS.id, 20);
 
   return {

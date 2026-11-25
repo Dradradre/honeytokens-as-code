@@ -10,6 +10,7 @@ import type { Alert, Trap } from './core/types.ts';
  *
  *   registry.json   every trap and where it is planted
  *   alerts.jsonl    every hit the alert server saw, one JSON object per line
+ *   alerts.1.jsonl  the previous log, once alerts.jsonl passed MAX_ALERT_LOG_BYTES
  */
 export interface Registry {
   version: 1;
@@ -23,6 +24,10 @@ export function defaultHome(): string {
 const registryFile = (home: string) => path.join(home, 'registry.json');
 const lockFile = (home: string) => path.join(home, 'registry.lock');
 const alertsFile = (home: string) => path.join(home, 'alerts.jsonl');
+const rotatedAlertsFile = (home: string) => path.join(home, 'alerts.1.jsonl');
+
+/** A flood of hits can't fill the disk: the log rotates at this size and one old file is kept. */
+export const MAX_ALERT_LOG_BYTES = 10 * 1024 * 1024;
 
 export function readRegistry(home: string): Registry {
   const file = registryFile(home);
@@ -45,21 +50,29 @@ export function updateRegistry<T>(home: string, change: (registry: Registry) => 
   });
 }
 
-export function appendAlert(home: string, alert: Alert): void {
+export function appendAlert(home: string, alert: Alert, maxBytes = MAX_ALERT_LOG_BYTES): void {
   ensureHome(home);
-  fs.appendFileSync(alertsFile(home), JSON.stringify(alert) + '\n', { mode: 0o600 });
+  const file = alertsFile(home);
+  if (fs.existsSync(file) && fs.statSync(file).size >= maxBytes) fs.renameSync(file, rotatedAlertsFile(home));
+  fs.appendFileSync(file, JSON.stringify(alert) + '\n', { mode: 0o600 });
 }
 
-/** The latest `limit` alerts, oldest first. */
+/** The latest `limit` alerts across the current and rotated log, oldest first. */
 export function readAlerts(home: string, limit: number): Alert[] {
-  const file = alertsFile(home);
-  if (!fs.existsSync(file)) return [];
-  return fs
-    .readFileSync(file, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .slice(-limit)
-    .map((line) => JSON.parse(line) as Alert);
+  const lines = [rotatedAlertsFile(home), alertsFile(home)]
+    .filter((file) => fs.existsSync(file))
+    .flatMap((file) => fs.readFileSync(file, 'utf8').split('\n'));
+  return lines.flatMap(parseAlert).slice(-limit);
+}
+
+/** A line the server is still writing (or a damaged one) is skipped, not fatal. */
+function parseAlert(line: string): Alert[] {
+  if (!line) return [];
+  try {
+    return [JSON.parse(line) as Alert];
+  } catch {
+    return [];
+  }
 }
 
 function ensureHome(home: string): void {

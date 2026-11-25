@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util';
 import { formatAlert } from './core/format.ts';
 import { notifiersFromEnv } from './notify/index.ts';
 import { createService } from './service.ts';
+import { VERSION } from './version.ts';
 
 const USAGE = `Usage: honeytoken <command> [options]
 
@@ -25,6 +26,8 @@ Commands:
   alerts                 Show recent alerts (--limit n, default 20; --json for raw)
   serve                  Run the alert server (--host, --port; default 127.0.0.1:8787)
       --cooldown <sec>       quiet period per trap and address (default 600)
+      --trust-proxy <hdr>    take the client address from this header set by your proxy:
+                             x-forwarded-for (one proxy), cf-connecting-ip, x-real-ip
                          Forwards to HONEYTOKEN_SLACK_WEBHOOK / HONEYTOKEN_DISCORD_WEBHOOK if set
   mcp                    Run the MCP server on stdio (for Claude Code, Cursor, ...)
   install-skill          Copy the agent skill to ~/.claude/skills/honeytoken-planting
@@ -32,6 +35,7 @@ Commands:
 
 Global:
   --home <path>          data directory (env HONEYTOKEN_HOME, default ~/.honeytoken)
+  -v, --version          print the version
 `;
 
 const { values: opt, positionals } = parseArgs({
@@ -52,6 +56,8 @@ const { values: opt, positionals } = parseArgs({
     host: { type: 'string' },
     port: { type: 'string' },
     cooldown: { type: 'string' },
+    'trust-proxy': { type: 'string' },
+    version: { type: 'boolean', short: 'v' },
     dir: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   },
@@ -71,6 +77,7 @@ function toInt(value: string | undefined, name: string): number | undefined {
 }
 
 async function main(): Promise<void> {
+  if (opt.version) return console.log(VERSION);
   switch (command) {
     case 'create': {
       if (opt.charset && opt.charset !== 'alnum' && opt.charset !== 'hex') {
@@ -116,8 +123,11 @@ async function main(): Promise<void> {
         console.log(`${r.id}  ${r.label || '-'}`);
         for (const f of r.removed) console.log(`  ${dryRun ? 'would remove' : 'removed'} ${f.file} line ${f.lines.join(', ')}`);
         for (const f of r.missing) console.log(`  missing ${f} (skipped)`);
+        for (const f of r.refused) console.log(`  refused ${f}: it now resolves outside its repository`);
+        if (r.forgotten) console.log(`  never planted: ${dryRun ? 'would be deleted' : 'deleted'}`);
       }
-      if (!dryRun) console.log(`retired ${results.length} trap(s); they keep alerting if an old copy is used`);
+      const retired = results.filter((r) => !r.forgotten).length;
+      if (!dryRun) console.log(`retired ${retired} trap(s); they keep alerting if an old copy is used`);
       return;
     }
 
@@ -133,11 +143,14 @@ async function main(): Promise<void> {
       const host = opt.host ?? '127.0.0.1';
       const port = toInt(opt.port, 'port') ?? 8787;
       const cooldown = toInt(opt.cooldown, 'cooldown');
+      const trustProxy = opt['trust-proxy'];
+      if (trustProxy !== undefined && !/^[A-Za-z0-9-]+$/.test(trustProxy)) throw new Error('--trust-proxy takes a header name');
       const { serve } = await import('./server.ts');
-      await serve({ home: service.home, host, port, cooldownMs: cooldown === undefined ? undefined : cooldown * 1000 });
+      await serve({ home: service.home, host, port, trustProxy, cooldownMs: cooldown === undefined ? undefined : cooldown * 1000 });
       const webhooks = notifiersFromEnv().length - 1; // minus the console
       console.log(`honeytoken alert server on http://${host}:${port}`);
       console.log(`home: ${service.home}`);
+      console.log(`client address: ${trustProxy ? `${trustProxy} header (trusted proxy)` : 'TCP peer'}`);
       console.log(`forwarding: ${webhooks ? `console + ${webhooks} webhook(s)` : 'console only'}\n`);
       return;
     }

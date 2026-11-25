@@ -31,7 +31,7 @@ export function formatAlert(a: Alert): string {
     `from: ${code(a.clientIp)}` + (a.forwardedFor ? ` x-forwarded-for: ${code(a.forwardedFor)}` : ''),
     `user-agent: ${code(a.userAgent)}`,
     ...(a.botHint ? [`likely: ${a.botHint} (link previews fetch URLs on their own)`] : []),
-    ...(a.suppressed ? [`suppressed: ${a.suppressed} more hits from this address since the last alert`] : []),
+    ...(a.suppressed ? [`suppressed: ${a.suppressed} more hits on this trap since the last alert`] : []),
     `at: ${a.at}`,
   ].join('\n');
 }

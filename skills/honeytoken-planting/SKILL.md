@@ -80,9 +80,10 @@ Rules:
 
 ## 5. Register it
 
-Call `register_planted_token` with the trap id and the file path relative to the repo root. The tool reads the
-file and records the lines itself. If it fails, the value in the file differs from what was issued: fix the
-file instead of retrying.
+Call `register_planted_token` with the trap id and the **absolute** path of the file (the MCP server may not be
+running in the repo). The tool reads the file and records the lines itself. If it says the trap is not found,
+the value in the file differs from what was issued: fix the file instead of retrying. It also refuses files
+outside a git repository, inside `.git`, or reached through a symlink that leaves the repo; pick another spot.
 
 ## 6. Verify and report
 
@@ -103,7 +104,10 @@ file instead of retrying.
    left dangling, and leave the rest of the file as it was.
 4. Tell the user the traps are now **retired**, not gone: git history and older clones still hold the decoy,
    so the alert server keeps watching them, and a hit is reported as coming from an old copy.
-   `list_traps` with `includeRetired: true` shows them.
+   `list_traps` with `includeRetired: true` shows them. Traps that were never planted (`forgotten: true`)
+   are simply deleted.
+5. If a file comes back as `refused`, it now leads outside its repository through a symlink and was left
+   alone. Tell the user; do not try to edit it yourself.
 
 ## Reviewing alerts
 

@@ -1,6 +1,6 @@
 {
   "name": "honeytoken-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Plant context-aware honeytokens in your repo through your coding agent, and get alerted when they are used.",
   "license": "MIT",
   "type": "module",

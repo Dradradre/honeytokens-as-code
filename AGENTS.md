@@ -76,8 +76,9 @@ Run `npm run typecheck && npm test` before calling a change done.
    (default `~/.honeytoken`, mode 0700/0600). No lock file, ignore entry, config or skill in the repo.
 2. **The agent never chooses the alert host.** `baseUrl` comes from `HONEYTOKEN_BASE_URL` or the CLI flag;
    the MCP tools have no such input.
-3. **Placements are verified, not trusted.** `register` reads the file and finds the lines itself, and refuses
-   paths outside the repo containing the working directory.
+3. **Placements are verified, not trusted.** `register` reads the file and finds the lines itself. The repo is
+   found from the file, not the working directory. Refused: files outside a git repository, inside `.git`, or
+   whose real path (symlinks resolved) leaves the repo. `clean` re-checks the real path before writing.
 4. **Cleaning retires, it does not forget.** Retired traps stay in the registry and keep alerting, because
    history and old clones still carry the decoy.
 5. **Request data is hostile.** It is clipped in `handle`, kept inside code spans with backticks removed,
@@ -89,6 +90,10 @@ Run `npm run typecheck && npm test` before calling a change done.
 8. **Tokens are not echoed** by `list` or `list_traps`.
 9. **Trap values live on a single line.** `clean` deletes whole lines that contain a trap id or token.
 10. **Registry writes hold the lock.** Go through `updateRegistry`; never write `registry.json` directly.
+11. **Alert volume is bounded.** Per trap and address one alert per cooldown, per trap at most `maxPerTrap` per
+    window, a capped address map, and an alert log that rotates at `MAX_ALERT_LOG_BYTES`.
+12. **Client addresses come from the socket** unless the operator names a header with `--trust-proxy`.
+    `X-Forwarded-For` is read from the right: the hop our proxy appended, not what the client wrote.
 
 ## Tests
 

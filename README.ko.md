@@ -150,7 +150,10 @@ honeytoken alerts
 
 - **로컬 (기본값):** `http://127.0.0.1:8787`. 시험용이고, 내 기기에서만 울립니다.
 - **실전:** 인터넷에서 닿는 곳(작은 VPS, 리버스 프록시, 터널) 뒤에서 `honeytoken serve --host 0.0.0.0`을 띄우고,
-  `~/.honeytoken/registry.json` 사본을 넣어 준 뒤 `HONEYTOKEN_BASE_URL`을 그 공개 URL로 지정합니다. 호스트명은 우리 회사 것처럼 보여야 합니다.
+  `~/.honeytoken/registry.json` 사본을 넣어 준 뒤 `HONEYTOKEN_BASE_URL`을 그 공개 URL로 지정합니다.
+- **프록시나 터널 뒤라면** 실제 클라이언트 주소가 담긴 헤더를 알려 주세요. 안 그러면 모든 침입자가 프록시 주소 하나로 보이고 쿨다운도 하나를 나눠 씁니다.
+  nginx나 Caddy 하나 뒤라면 `--trust-proxy x-forwarded-for`, Cloudflare 뒤라면 `--trust-proxy cf-connecting-ip`.
+  플래그가 없으면 헤더는 무시합니다. 누구나 위조할 수 있으니까요. 호스트명은 우리 회사 것처럼 보여야 합니다.
   예: `https://hooks.acme-internal.dev`. `ngrok-free.app`을 가리키는 미끼에는 아무도 안 속습니다.
 
 <br>
@@ -173,7 +176,7 @@ at: 2026-12-14T03:12:09.114Z
 |---|---|
 | `(retired trap)` + `note: this trap was cleaned up, so an old copy of the repo is in use` | 이미 제거한 트랩이 울렸을 때. 누군가 히스토리나 예전 클론을 쓰고 있다는 뜻 |
 | `likely: Slack link preview (link previews fetch URLs on their own)` | UA가 Slack, Discord, Teams, X, LinkedIn, WhatsApp, GitHub 이미지 프록시, 검색 크롤러일 때 |
-| `suppressed: 41 more hits from this address since the last alert` | 쿨다운(트랩·주소별 기본 10분)이 반복 알림을 묶었을 때. 전부 `alerts.jsonl`에는 남음 |
+| `suppressed: 41 more hits on this trap since the last alert` | 폭주 제어가 반복 알림을 묶었을 때. 트랩·주소별 10분에 한 번, 주소가 몇 개든 트랩당 10분에 최대 5번. 전부 `alerts.jsonl`에는 남음 |
 
 **무엇이 트랩을 건드리나**
 
@@ -195,7 +198,8 @@ at: 2026-12-14T03:12:09.114Z
 |---|---|
 | 🏠 **레포에는 미끼만 닿음** | 트랩 지도는 레포가 아니라 `~/.honeytoken`에 있습니다. lock 파일도, ignore 항목도 없습니다(커밋된 ignore 한 줄이 "여기 허니토큰 있음"이라고 광고하니까요). `git clean`으로 날아갈 일도 없습니다. 스킬은 `~/.claude/skills`에 설치되고 `claude mcp add`는 local scope가 기본입니다. |
 | 🧭 **경보 호스트는 에이전트가 못 고름** | base URL은 `HONEYTOKEN_BASE_URL`이나 CLI에서만 옵니다. 모델이 그럴듯한 도메인을 지어내면 영영 울리지 않는 트랩이 됩니다. |
-| 🔍 **위치는 믿지 않고 검증** | `register_planted_token`은 파일을 직접 읽어 줄을 찾습니다. 아직 안 심은 트랩이나 레포 밖 경로는 거부합니다. |
+| 🔍 **위치는 믿지 않고 검증** | `register_planted_token`은 파일을 직접 읽어 줄을 찾습니다. 아직 안 심은 트랩, git 레포 밖이나 `.git` 안의 파일, 레포 밖으로 이어지는 심볼릭 링크는 거부합니다. `clean`은 쓰기 직전에 실제 경로를 한 번 더 확인합니다. |
+| 🌊 **폭주해도 작게** | 트랩·주소별 쿨다운에 한 번, 침입자가 주소를 아무리 바꿔도 트랩당 최대 5번. 경보 로그는 10MB에서 교체됩니다. |
 | 🧨 **요청 데이터는 적대적으로 취급** | 공격자가 보낸 경로와 UA는 잘라서 코드 스팬 안에 가둡니다. Slack용 텍스트는 이스케이프하고 Discord 멘션은 꺼서, 경보를 통해 `@everyone`이 날아가지 않습니다. |
 | 🥱 **서버는 일부러 따분하게** | 트랩에 걸린 요청은 평범한 API처럼 `401 {"error":"unauthorized"}`를 받습니다. 배너, 버전, 헬스 체크 엔드포인트 없음. |
 | 🪦 **지워도 잊지 않음** | 제거한 트랩은 은퇴할 뿐 계속 울립니다. git 히스토리와 정리 전에 만든 클론에는 미끼가 그대로 남아 있고, 바로 그 유출이 가장 알고 싶은 신호입니다. |
@@ -257,9 +261,9 @@ export default {
 | 툴 | 입력 | 반환 |
 |---|---|---|
 | `create_webhook_trap` | `label?`, `pathPrefix?` (기본 `/v1/hooks`), `tokenPrefix?` (`[A-Za-z0-9._-]` 32자 이하), `tokenLength?` (16–128, 기본 32), `tokenCharset?` (`alnum` \| `hex`) | `id`, `url`, `token`, `next`, base URL 미설정 시 `warning` |
-| `register_planted_token` | `id`, `file` (레포 기준 상대 경로), `line?` (힌트가 아니라 검증 조건) | 찾은 위치 목록 |
+| `register_planted_token` | `id`, `file` (절대 경로 권장), `line?` (힌트가 아니라 검증 조건) | 찾은 위치 목록 |
 | `list_traps` | `includeRetired?` | id, label, status, url, createdAt, `repo/file:lines`. 토큰 없음 |
-| `clean_traps` | `ids` **또는** `all: true`, `dryRun?` | 트랩별로 파일마다 지운 줄, 사라진 기록 파일. 트랩은 `retired`가 되어 계속 감시 |
+| `clean_traps` | `ids` **또는** `all: true`, `dryRun?` | 트랩별로 파일마다 지운 줄, `missing`·`refused` 파일, `forgotten`. 심었던 트랩은 `retired`가 되어 계속 감시, 안 심은 트랩은 삭제 |
 | `list_alerts` | `limit?` (1–200, 기본 20) | 최근 경보(오래된 순)와 "공격자가 쓴 데이터" 경고문 |
 
 </details>
@@ -275,9 +279,10 @@ honeytoken register <id> <file> [--line n]
 honeytoken list            [--all] [--json]
 honeytoken clean <id...> | --all  [--dry-run]
 honeytoken alerts          [--limit 20] [--json]
-honeytoken serve           [--host 127.0.0.1] [--port 8787] [--cooldown 600]
+honeytoken serve           [--host 127.0.0.1] [--port 8787] [--cooldown 600] [--trust-proxy <header>]
 honeytoken mcp
 honeytoken install-skill   [--dir ~/.claude/skills]
+honeytoken --version
 
 global: --home <path>      (env HONEYTOKEN_HOME, default ~/.honeytoken)
 ```
@@ -325,9 +330,21 @@ global: --home <path>      (env HONEYTOKEN_HOME, default ~/.honeytoken)
 ```
 
 잠금을 잡고 권한 `0600`으로 원자적으로 기록합니다. 이 디렉터리는 다른 안전한 곳에 백업해 두세요. 없으면 `clean`이 트랩을 찾지 못합니다.
-경보 서버는 요청마다 이 파일을 다시 읽으므로 새 트랩은 재시작 없이 바로 살아납니다. 모든 경보는 옆의 `alerts.jsonl`에 쌓입니다.
+경보 서버는 요청마다 이 파일을 다시 읽으므로 새 트랩은 재시작 없이 바로 살아납니다. 모든 경보는 옆의 `alerts.jsonl`에 쌓이고,
+10MB가 되면 `alerts.1.jsonl`로 넘기고 새 파일을 시작합니다.
 
 </details>
+
+<br>
+
+## 위협 모델
+
+| 상황 | 잡히나 |
+|---|---|
+| 레포가 샌다(실수로 공개, CI 토큰 탈취, 외주 클론) → 누군가 찾은 걸 써 본다 | ✅ 이걸 위해 만들었습니다 |
+| 정리한 뒤에도 누군가 예전 클론이나 git 히스토리로 작업한다 | ✅ 은퇴한 트랩도 계속 울립니다 |
+| 경보 서버가 털린다 | ❌ 그 호스트명이 곧 거기를 가리키는 모든 URL 미끼의 정체입니다. 다른 일은 하지 않는 서버로 두세요 |
+| **내 컴퓨터가 털린다** | ⚠️ 침입자가 먼저 둘러보지 않았을 때만. `~/.honeytoken/registry.json`에 모든 미끼가 있고, 코딩 에이전트 대화 기록에도 넘겨받은 토큰이 남아 있습니다. 트랩은 레포를 grep하는 사람을 잡지, 홈 디렉터리를 읽는 사람을 잡지 못합니다 |
 
 <br>
 
@@ -336,6 +353,7 @@ global: --home <path>      (env HONEYTOKEN_HOME, default ~/.honeytoken)
 - **웹훅 트랩뿐입니다.** AWS, GCP, DB 자격 증명 카나리는 아직 없습니다.
 - **경보 서버는 직접 띄워야 합니다.** 서버가 죽어 있으면 그 사이 신호는 사라집니다.
 - **`list_alerts`는 로컬 로그만 읽습니다.** 경보 서버가 다른 기기에서 돈다면 `alerts.jsonl`도 그쪽에 있습니다.
+- **작정한 폭주는 오래된 로그를 밀어낼 수 있습니다.** 이미 Slack이나 Discord로 나간 경보는 영향이 없습니다.
 - **`clean`은 줄 단위로 지웁니다.** 그래서 플레이북이 미끼를 한 줄씩 따로 두게 합니다. 에이전트가 미끼 위에 단 주석은 에이전트가 정리합니다.
 - **에이전트의 신중함은 플레이북 수준까지입니다.** 커밋 전에 diff를 직접 보세요.
 

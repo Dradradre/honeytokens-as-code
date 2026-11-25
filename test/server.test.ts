@@ -42,6 +42,26 @@ test('node adapter: live and retired traps alert, noise does not, new traps need
   assert.equal(alerts[0]?.clientIp.replace('::ffff:', ''), '127.0.0.1');
 });
 
+test('behind a trusted proxy, each intruder keeps its own address', async () => {
+  const { home, service } = sandbox();
+  const { url } = service.issue({});
+  const path = new URL(url).pathname;
+  const run = async (trustProxy?: string) => {
+    const alerts: Alert[] = [];
+    const server = await serve({ home, port: 0, trustProxy, onAlert: (a) => void alerts.push(a) });
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      for (const ip of ['203.0.113.1', '203.0.113.2']) await fetch(base + path, { headers: { 'x-forwarded-for': `6.6.6.6, ${ip}` } });
+      await new Promise((r) => setImmediate(r));
+    } finally {
+      server.close();
+    }
+    return alerts.map((a) => a.clientIp.replace('::ffff:', ''));
+  };
+  assert.deepEqual(await run(), ['127.0.0.1', '127.0.0.1'], 'without the flag the header is ignored');
+  assert.deepEqual(await run('x-forwarded-for'), ['203.0.113.1', '203.0.113.2']);
+});
+
 test('default pipeline logs every hit to alerts.jsonl', async () => {
   const { home, service } = sandbox();
   const { url } = service.issue({});

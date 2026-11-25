@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { Service } from './service.ts';
+import { VERSION } from './version.ts';
 
 const INSTRUCTIONS = `Plants honeytokens (decoy credentials/URLs that raise an alert when used).
 Workflow: study the repo's existing .env / config / route naming -> create_webhook_trap with a matching
@@ -25,7 +26,7 @@ function run(fn: () => unknown): CallToolResult {
  * There is deliberately no baseUrl input; the alert host comes from the environment only.
  */
 export function createMcpServer(service: Service): McpServer {
-  const server = new McpServer({ name: 'honeytoken-mcp', version: '0.2.0' }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'honeytoken-mcp', version: VERSION }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
     'create_webhook_trap',
@@ -56,10 +57,11 @@ export function createMcpServer(service: Service): McpServer {
       title: 'Register planted token',
       description:
         'Record where a trap was planted. The tool reads the file and finds the lines holding the trap itself; ' +
-        'it fails if the trap is not in the file yet. Call again after moving the trap within a file.',
+        'it fails if the trap is not in the file yet, or if the file is outside a git repository, inside .git, ' +
+        'or reached through a symlink that leaves the repository. Call again after moving the trap within a file.',
       inputSchema: {
         id: trapId.describe('Trap id from create_webhook_trap.'),
-        file: z.string().min(1).describe('File the trap was written to, relative to the repo root (or absolute inside it).'),
+        file: z.string().min(1).describe('Absolute path of the file the trap was written to (preferred), or a path relative to the server\'s working directory.'),
         line: z.number().int().positive().optional().describe('Optional check: fail unless the trap is on this 1-based line.'),
       },
     },
@@ -85,8 +87,9 @@ export function createMcpServer(service: Service): McpServer {
       title: 'Clean traps',
       description:
         'Delete every line holding the given traps from their recorded files and retire the traps. Retired traps ' +
-        'keep alerting, because old clones and git history still hold the decoy. Use dryRun first to show the user ' +
-        'what will be removed.',
+        'keep alerting, because old clones and git history still hold the decoy. Traps that were never planted are ' +
+        'deleted outright. Files that now lead outside their repository are refused. Use dryRun first to show the ' +
+        'user what will be removed.',
       inputSchema: {
         ids: z.array(trapId).optional().describe('Traps to clean.'),
         all: z.boolean().optional().describe('Clean every active trap instead of listing ids.'),

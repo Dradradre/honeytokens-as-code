@@ -44,7 +44,7 @@ export interface Alert {
   userAgent?: string;
   /** Set when the user agent looks like a link-preview bot rather than a person. */
   botHint?: string;
-  /** Hits from the same address swallowed by the cooldown since the previous alert. */
+  /** Hits on this trap held back by the cooldown since its previous alert. */
   suppressed?: number;
   at: string;
 }

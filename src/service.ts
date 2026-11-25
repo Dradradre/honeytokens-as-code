@@ -13,7 +13,7 @@ export interface ServiceOptions {
   home?: string;
   /** Alert server URL. Default HONEYTOKEN_BASE_URL. Never taken from an agent. */
   baseUrl?: string;
-  /** Where relative file paths resolve from and the repo is looked up. Default process.cwd() */
+  /** Where relative file paths resolve from. Default process.cwd() */
   cwd?: string;
 }
 
@@ -42,6 +42,10 @@ export interface CleanResult {
   removed: { file: string; lines: number[] }[];
   /** Recorded files that no longer exist. */
   missing: string[];
+  /** Recorded files that now resolve outside their repository (a symlink appeared); left untouched. */
+  refused: string[];
+  /** The trap was never planted, so it was deleted instead of retired. */
+  forgotten: boolean;
 }
 
 export type Service = ReturnType<typeof createService>;
@@ -75,21 +79,18 @@ export function createService(opts: ServiceOptions = {}) {
      * Record where a trap was planted. The lines are found by reading the file, not taken
      * from the caller, so the registry never points at a line that does not hold the trap.
      * Registering a file again replaces that file's placements with what is there now.
+     *
+     * The repo is found from the file itself, not from the working directory, because MCP
+     * clients don't all start servers inside the project.
      */
     register(id: string, file: string, line?: number): Placement[] {
-      const repo = findRepoRoot(cwd());
-      const abs = path.resolve(cwd(), file);
-      const rel = path.relative(repo, abs);
-      if (rel === '' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
-        throw new Error(`${file} is outside the repository at ${repo}`);
-      }
-      if (!fs.existsSync(abs)) throw new Error(`${rel} does not exist`);
+      const { repo, rel, real } = resolvePlantedFile(path.resolve(cwd(), file), file);
 
       return updateRegistry(home, (registry) => {
         const trap = findTrap(registry, id);
         if (trap.status === 'retired') throw new Error(`trap ${id} is retired; issue a new one`);
 
-        const hits = linesWithTrap(abs, trap);
+        const hits = linesWithTrap(real, trap);
         if (hits.length === 0) throw new Error(`trap ${id} not found in ${rel}; plant it before registering`);
         if (line !== undefined && !hits.includes(line)) {
           throw new Error(`line ${line} of ${rel} does not hold trap ${id} (found on line ${hits.join(', ')})`);
@@ -122,20 +123,26 @@ export function createService(opts: ServiceOptions = {}) {
     /**
      * Delete every line holding the traps from their recorded files and retire the traps.
      * Retired traps stay in the registry and keep alerting: the decoy lives on in git history
-     * and in every clone made before the cleanup.
+     * and in every clone made before the cleanup. A trap that was never planted never left this
+     * machine, so it is deleted outright.
      */
     clean(ids: string[] | 'all', { dryRun = false } = {}): CleanResult[] {
       const run = (registry: Registry) => {
         const targets = ids === 'all' ? registry.traps.filter((t) => t.status === 'active') : ids.map((id) => findTrap(registry, id));
         const now = new Date().toISOString();
-        return targets.map((trap) => {
+        const results = targets.map((trap) => {
           const result = removeFromFiles(trap, dryRun);
-          if (!dryRun && trap.status === 'active') {
+          if (!dryRun && !result.forgotten && trap.status === 'active') {
             trap.status = 'retired';
             trap.retiredAt = now;
           }
           return result;
         });
+        if (!dryRun) {
+          const forgotten = new Set(results.filter((r) => r.forgotten).map((r) => r.id));
+          registry.traps = registry.traps.filter((t) => !forgotten.has(t.id));
+        }
+        return results;
       };
       return dryRun ? run(readRegistry(home)) : updateRegistry(home, run);
     },
@@ -144,6 +151,31 @@ export function createService(opts: ServiceOptions = {}) {
       return readAlerts(home, limit);
     },
   };
+}
+
+/**
+ * Where a planted file really lives. It must be a regular file inside a git repository,
+ * outside `.git/`, and must not reach outside that repository through a symlink: `clean`
+ * writes to these files later, so a link to ~/.bashrc must never get on the record.
+ */
+function resolvePlantedFile(abs: string, shown: string): { repo: string; rel: string; real: string } {
+  if (!fs.existsSync(abs)) throw new Error(`${shown} does not exist`);
+  const gitRoot = findGitRoot(path.dirname(abs));
+  if (!gitRoot) throw new Error(`${shown} is not inside a git repository`);
+
+  const repo = fs.realpathSync(gitRoot);
+  const real = fs.realpathSync(abs);
+  const rel = relativeInside(repo, real);
+  if (rel === undefined) throw new Error(`${shown} resolves outside ${repo} through a symlink`);
+  if (rel.split(path.sep)[0] === '.git') throw new Error(`${shown} is inside .git`);
+  if (!fs.statSync(real).isFile()) throw new Error(`${shown} is not a regular file`);
+  return { repo, rel, real };
+}
+
+/** `child` relative to `parent`, or undefined when it is not strictly inside. */
+function relativeInside(parent: string, child: string): string | undefined {
+  const rel = path.relative(parent, child);
+  return rel === '' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel) ? undefined : rel;
 }
 
 function findTrap(registry: Registry, id: string): Trap {
@@ -160,7 +192,14 @@ function linesWithTrap(file: string, trap: Trap): number[] {
 }
 
 function removeFromFiles(trap: Trap, dryRun: boolean): CleanResult {
-  const result: CleanResult = { id: trap.id, label: trap.label, removed: [], missing: [] };
+  const result: CleanResult = {
+    id: trap.id,
+    label: trap.label,
+    removed: [],
+    missing: [],
+    refused: [],
+    forgotten: trap.placements.length === 0,
+  };
   const files = new Map(trap.placements.map((p) => [path.join(p.repo, p.file), p]));
 
   for (const [abs, placement] of files) {
@@ -169,19 +208,25 @@ function removeFromFiles(trap: Trap, dryRun: boolean): CleanResult {
       result.missing.push(shown);
       continue;
     }
-    const lines = fs.readFileSync(abs, 'utf8').split('\n');
+    // Checked again at write time: the file may have been swapped for a symlink since it was registered.
+    const real = fs.realpathSync(abs);
+    if (relativeInside(fs.realpathSync(placement.repo), real) === undefined) {
+      result.refused.push(shown);
+      continue;
+    }
+    const lines = fs.readFileSync(real, 'utf8').split('\n');
     const removed = lines.flatMap((text, i) => (lineHasTrap(text, trap) ? [i + 1] : []));
     if (removed.length === 0) continue;
     result.removed.push({ file: shown, lines: removed });
-    if (!dryRun) fs.writeFileSync(abs, lines.filter((text) => !lineHasTrap(text, trap)).join('\n'));
+    if (!dryRun) fs.writeFileSync(real, lines.filter((text) => !lineHasTrap(text, trap)).join('\n'));
   }
   return result;
 }
 
-/** Nearest directory with a .git entry (directory, or file for worktrees), else `start` itself. */
-export function findRepoRoot(start: string): string {
+/** Nearest directory at or above `start` with a .git entry (directory, or file for worktrees). */
+export function findGitRoot(start: string): string | undefined {
   for (let dir = path.resolve(start); ; dir = path.dirname(dir)) {
     if (fs.existsSync(path.join(dir, '.git'))) return dir;
-    if (path.dirname(dir) === dir) return path.resolve(start);
+    if (path.dirname(dir) === dir) return undefined;
   }
 }
