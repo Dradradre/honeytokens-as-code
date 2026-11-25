@@ -1,4 +1,4 @@
-<svg class="term" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 608" width="100%" role="img" aria-label="Demo: the agent reads the repo, issues a trap, plants it in deploy/legacy/billing.env and registers it. 19 days later the alert names the leaked file.">
+<svg class="term" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 608" width="100%" role="img" aria-label="Demo: the agent reads the repo, creates a powerless AWS key, plants it in deploy/legacy/export.env and registers it. 19 days later CloudTrail shows the key in use and the alert names the leaked file.">
 <style>
   .term text { font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 14.5px; }
   .ln { opacity: 0; animation-duration: 18s; animation-iteration-count: infinite; animation-timing-function: ease-out; }
@@ -34,23 +34,23 @@
 </g>
   <text class="ln" style="animation-name:l0" x="32" y="70" xml:space="preserve"><tspan fill="#F5A524" font-weight="700">› </tspan><tspan fill="#E6EDF3" font-weight="700">plant honeytokens in this repo</tspan></text>
   
-  <text class="ln" style="animation-name:l2" x="32" y="118" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Read </tspan><tspan fill="#7D8590">.env.example  config/  deploy/  docs/  src/routes/</tspan></text>
-  <text class="ln" style="animation-name:l3" x="32" y="142" xml:space="preserve"><tspan fill="#7D8590">  Stripe-style keys (sk_live_…), routes under /api/v2/*, SCREAMING_SNAKE env vars</tspan></text>
+  <text class="ln" style="animation-name:l2" x="32" y="118" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Read </tspan><tspan fill="#7D8590">.env.example  config/  deploy/  terraform/  src/</tspan></text>
+  <text class="ln" style="animation-name:l3" x="32" y="142" xml:space="preserve"><tspan fill="#7D8590">  AWS via boto3, service users named svc-&lt;team&gt;-&lt;job&gt;, SCREAMING_SNAKE env vars</tspan></text>
   <text class="ln" style="animation-name:l4" x="32" y="166" xml:space="preserve"><tspan fill="#7D8590">  deploy/legacy/ is not loaded by any code path → safe spot</tspan></text>
-  <text class="ln" style="animation-name:l5" x="32" y="190" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">create_webhook_trap</tspan></text>
-  <text class="ln" style="animation-name:l6" x="32" y="214" xml:space="preserve"><tspan fill="#7D8590">  pathPrefix </tspan><tspan fill="#E6EDF3">/api/v2/billing/webhook</tspan><tspan fill="#7D8590">   tokenPrefix </tspan><tspan fill="#E6EDF3">sk_live_</tspan></text>
-  <text class="ln" style="animation-name:l7" x="32" y="238" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Update </tspan><tspan fill="#7D8590">deploy/legacy/billing.env</tspan></text>
-  <text class="ln" style="animation-name:l8" x="32" y="262" xml:space="preserve"><tspan fill="#4A5361">  6 </tspan><tspan fill="#3DDC97">+ # Legacy billing gateway (pre-2024 migration). Kept for rollback.</tspan></text>
-  <text class="ln" style="animation-name:l9" x="32" y="286" xml:space="preserve"><tspan fill="#4A5361">  7 </tspan><tspan fill="#3DDC97">+ BILLING_GATEWAY_URL=https://hooks.example.com/api/v2/billing/webhook/k3v9q…</tspan></text>
-  <text class="ln" style="animation-name:l10" x="32" y="310" xml:space="preserve"><tspan fill="#4A5361">  8 </tspan><tspan fill="#3DDC97">+ BILLING_GATEWAY_KEY=sk_live_Qm7rT2xVb9cWn4Lp8sYd…</tspan></text>
+  <text class="ln" style="animation-name:l5" x="32" y="190" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">create_aws_trap</tspan><tspan fill="#7D8590">   userName </tspan><tspan fill="#E6EDF3">svc-billing-export</tspan></text>
+  <text class="ln" style="animation-name:l6" x="32" y="214" xml:space="preserve"><tspan fill="#7D8590">  real key, explicit deny-all policy, nothing it can touch</tspan></text>
+  <text class="ln" style="animation-name:l7" x="32" y="238" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Update </tspan><tspan fill="#7D8590">deploy/legacy/export.env</tspan></text>
+  <text class="ln" style="animation-name:l8" x="32" y="262" xml:space="preserve"><tspan fill="#4A5361">  6 </tspan><tspan fill="#3DDC97">+ # Legacy export job (replaced by the data platform). Kept for backfills.</tspan></text>
+  <text class="ln" style="animation-name:l9" x="32" y="286" xml:space="preserve"><tspan fill="#4A5361">  7 </tspan><tspan fill="#3DDC97">+ AWS_ACCESS_KEY_ID=AKIA4M7QX2…</tspan></text>
+  <text class="ln" style="animation-name:l10" x="32" y="310" xml:space="preserve"><tspan fill="#4A5361">  8 </tspan><tspan fill="#3DDC97">+ AWS_SECRET_ACCESS_KEY=wJr8Xk2Lq9…</tspan></text>
   <text class="ln" style="animation-name:l11" x="32" y="334" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">register_planted_token</tspan><tspan fill="#3DDC97">   ✓ found on lines 7, 8</tspan></text>
   <text class="ln" style="animation-name:l12" x="32" y="358" xml:space="preserve"><tspan fill="#3DDC97" font-weight="700">✓ 1 trap armed. </tspan><tspan fill="#7D8590">Only the decoy lines changed in this repo.</tspan></text>
   
   <text class="ln" style="animation-name:l14" x="32" y="406" xml:space="preserve"><tspan fill="#4A5361">──────────────────────────────────────  19 days later  ──────────────────────────────────────</tspan></text>
   
-  <text class="ln" style="animation-name:l16" x="32" y="454" xml:space="preserve"><tspan fill="#FF4D4F" font-weight="700">[honeytoken] trap triggered: legacy billing key</tspan></text>
-  <text class="ln" style="animation-name:l17" x="32" y="478" xml:space="preserve"><tspan fill="#7D8590">trap:       </tspan><tspan fill="#E6EDF3">k3v9q2m8x1t7w0p4z6rb</tspan><tspan fill="#7D8590"> (matched url + token)</tspan></text>
-  <text class="ln" style="animation-name:l18" x="32" y="502" xml:space="preserve"><tspan fill="#7D8590">planted in: </tspan><tspan fill="#FFD27A">acme-payments/deploy/legacy/billing.env:7,8</tspan></text>
-  <text class="ln" style="animation-name:l19" x="32" y="526" xml:space="preserve"><tspan fill="#7D8590">request:    </tspan><tspan fill="#E6EDF3">POST /api/v2/billing/webhook/k3v9q2m8x1t7w0p4z6rb</tspan></text>
-  <text class="ln" style="animation-name:l20" x="32" y="550" xml:space="preserve"><tspan fill="#7D8590">from:       </tspan><tspan fill="#E6EDF3">203.0.113.47</tspan><tspan fill="#7D8590">    user-agent: </tspan><tspan fill="#E6EDF3">python-requests/2.32.3</tspan></text>
+  <text class="ln" style="animation-name:l16" x="32" y="454" xml:space="preserve"><tspan fill="#FF4D4F" font-weight="700">[honeytoken] trap triggered: legacy export key</tspan></text>
+  <text class="ln" style="animation-name:l17" x="32" y="478" xml:space="preserve"><tspan fill="#7D8590">trap:       </tspan><tspan fill="#E6EDF3">m2x8c4k9q0w7e5r1t3y6</tspan><tspan fill="#7D8590"> (matched cloudtrail)</tspan></text>
+  <text class="ln" style="animation-name:l18" x="32" y="502" xml:space="preserve"><tspan fill="#7D8590">planted in: </tspan><tspan fill="#FFD27A">acme-payments/deploy/legacy/export.env:7,8</tspan></text>
+  <text class="ln" style="animation-name:l19" x="32" y="526" xml:space="preserve"><tspan fill="#7D8590">request:    </tspan><tspan fill="#E6EDF3">AWS sts.amazonaws.com GetCallerIdentity (us-east-1)</tspan></text>
+  <text class="ln" style="animation-name:l20" x="32" y="550" xml:space="preserve"><tspan fill="#7D8590">from:       </tspan><tspan fill="#E6EDF3">203.0.113.47</tspan><tspan fill="#7D8590">    user-agent: </tspan><tspan fill="#E6EDF3">aws-cli/2.17.0</tspan></text>
 </svg>

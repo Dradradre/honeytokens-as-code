@@ -1,4 +1,4 @@
-import { describePlacements } from './format.ts';
+import { clip, describePlacements } from './format.ts';
 import { trapsIn } from './match.ts';
 import type { Alert, Trap } from './types.ts';
 
@@ -12,7 +12,6 @@ export interface HandleOptions {
 }
 
 const MAX_BODY = 64 * 1024;
-const MAX_FIELD = 300;
 
 const BOTS: [RegExp, string][] = [
   [/Slackbot/i, 'Slack link preview'],
@@ -80,12 +79,6 @@ export function resolveClientIp(headers: Headers, peer: string, trustHeader?: st
   // A proxy appends the address it saw to X-Forwarded-For; everything left of it came from the client.
   const ip = trustHeader.toLowerCase() === 'x-forwarded-for' ? value.split(',').pop() : value;
   return ip?.trim() || peer;
-}
-
-function clip(value: string | null | undefined): string | undefined {
-  if (value == null) return undefined;
-  const flat = value.replace(/[\r\n]+/g, ' ');
-  return flat.length > MAX_FIELD ? flat.slice(0, MAX_FIELD) + '...' : flat;
 }
 
 async function readLimited(req: Request): Promise<string> {

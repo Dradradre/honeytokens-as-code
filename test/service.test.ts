@@ -75,7 +75,7 @@ test('register refuses a symlink that leads outside the repository', () => {
   assert.equal(fs.readFileSync(outside, 'utf8'), `important=1\nkey=${token}\n`);
 });
 
-test('clean refuses a planted file that was swapped for an outside symlink', () => {
+test('clean refuses a planted file that was swapped for an outside symlink', async () => {
   const { repo, root, write, service } = sandbox();
   const { id, token } = service.issue({});
   write('old.env', `K=${token}\n`);
@@ -86,7 +86,7 @@ test('clean refuses a planted file that was swapped for an outside symlink', () 
   fs.rmSync(path.join(repo, 'old.env'));
   fs.symlinkSync(outside, path.join(repo, 'old.env'));
 
-  assert.deepEqual(service.clean([id])[0]?.refused, ['acme-payments/old.env']);
+  assert.deepEqual((await service.clean([id]))[0]?.refused, ['acme-payments/old.env']);
   assert.equal(fs.readFileSync(outside, 'utf8'), `important=1\nkey=${token}\n`, 'outside file untouched');
 });
 
@@ -100,22 +100,22 @@ test('register finds the repo from the file, whatever directory the server start
   assert.equal(placement?.repo, fs.realpathSync(repo));
 });
 
-test('a trap that was never planted is deleted, not retired', () => {
+test('a trap that was never planted is deleted, not retired', async () => {
   const { write, service } = sandbox();
   const planted = service.issue({});
   const stray = service.issue({});
   write('old.env', `K=${planted.token}\n`);
   service.register(planted.id, 'old.env');
 
-  assert.equal(service.clean([stray.id], { dryRun: true })[0]?.forgotten, true);
+  assert.equal((await service.clean([stray.id], { dryRun: true }))[0]?.forgotten, true);
   assert.equal(service.list({ includeRetired: true }).length, 2, 'dry run deletes nothing');
 
-  const results = service.clean('all');
+  const results = await service.clean('all');
   assert.deepEqual(results.map((r) => [r.id, r.forgotten]), [[planted.id, false], [stray.id, true]]);
   assert.deepEqual(service.list({ includeRetired: true }).map((t) => [t.id, t.status]), [[planted.id, 'retired']]);
 });
 
-test('clean removes only trap lines, retires the trap, and keeps it on record', () => {
+test('clean removes only trap lines, retires the trap, and keeps it on record', async () => {
   const { write, read, service } = sandbox();
   const keep = service.issue({ label: 'keep' });
   const drop = service.issue({ label: 'drop' });
@@ -123,11 +123,11 @@ test('clean removes only trap lines, retires the trap, and keeps it on record', 
   service.register(drop.id, '.env.legacy');
   service.register(keep.id, '.env.legacy');
 
-  const preview = service.clean([drop.id], { dryRun: true });
+  const preview = await service.clean([drop.id], { dryRun: true });
   assert.deepEqual(preview[0]?.removed, [{ file: 'acme-payments/.env.legacy', lines: [2] }]);
   assert.equal(service.list().length, 2, 'dry run changes nothing');
 
-  service.clean([drop.id]);
+  await service.clean([drop.id]);
   assert.equal(read('.env.legacy'), `A=1\nB=2\nOTHER=${keep.token}\n`);
   assert.deepEqual(service.list().map((t) => t.label), ['keep']);
   const retired = service.list({ includeRetired: true }).find((t) => t.id === drop.id);
@@ -135,17 +135,17 @@ test('clean removes only trap lines, retires the trap, and keeps it on record', 
   assert.ok(retired?.retiredAt);
 
   assert.throws(() => service.register(drop.id, '.env.legacy'), /retired/);
-  assert.throws(() => service.clean(['nope']), /no trap/);
-  assert.deepEqual(service.clean('all').map((r) => r.id), [keep.id], '"all" means all active traps');
+  await assert.rejects(service.clean(['nope']), /no trap/);
+  assert.deepEqual((await service.clean('all')).map((r) => r.id), [keep.id], '"all" means all active traps');
 });
 
-test('clean reports recorded files that are gone', () => {
+test('clean reports recorded files that are gone', async () => {
   const { repo, write, service } = sandbox();
   const { id, token } = service.issue({});
   write('old.env', `K=${token}\n`);
   service.register(id, 'old.env');
   fs.rmSync(path.join(repo, 'old.env'));
-  assert.deepEqual(service.clean([id])[0]?.missing, ['acme-payments/old.env']);
+  assert.deepEqual((await service.clean([id]))[0]?.missing, ['acme-payments/old.env']);
 });
 
 test('alerts returns the latest entries from alerts.jsonl', () => {

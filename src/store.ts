@@ -11,6 +11,7 @@ import type { Alert, Trap } from './core/types.ts';
  *   registry.json   every trap and where it is planted
  *   alerts.jsonl    every hit the alert server saw, one JSON object per line
  *   alerts.1.jsonl  the previous log, once alerts.jsonl passed MAX_ALERT_LOG_BYTES
+ *   cloudtrail.json where the CloudTrail poller left off (AWS traps only)
  */
 export interface Registry {
   version: 1;
@@ -48,6 +49,25 @@ export function updateRegistry<T>(home: string, change: (registry: Registry) => 
     fs.renameSync(tmp, registryFile(home));
     return result;
   });
+}
+
+/** Small JSON state files next to the registry (e.g. the CloudTrail cursor). Written atomically. */
+export function readState<T>(home: string, name: string, fallback: T): T {
+  const file = path.join(home, name);
+  if (!fs.existsSync(file)) return fallback;
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function writeState(home: string, name: string, value: unknown): void {
+  ensureHome(home);
+  const file = path.join(home, name);
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(value) + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, file);
 }
 
 export function appendAlert(home: string, alert: Alert, maxBytes = MAX_ALERT_LOG_BYTES): void {

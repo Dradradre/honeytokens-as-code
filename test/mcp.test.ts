@@ -34,11 +34,11 @@ test('agent flow: create -> plant -> register -> list -> clean -> retired', asyn
   const created = await call(client, 'create_webhook_trap', {
     label: 'legacy billing key',
     pathPrefix: '/api/v2/billing/webhook',
-    tokenPrefix: 'sk_live_',
+    tokenPrefix: 'pgw_live_',
   });
   const { id, url, token, warning } = created.json;
   assert.match(url, /^https:\/\/hooks\.example\.com\/api\/v2\/billing\/webhook\/[a-z0-9]{20}$/);
-  assert.match(token, /^sk_live_/);
+  assert.match(token, /^pgw_live_/);
   assert.equal(warning, undefined);
 
   // Registering before planting must fail: the tool checks the file, not the agent's word.
@@ -80,6 +80,41 @@ test('list_alerts labels request fields as untrusted', async () => {
   await client.close();
 });
 
+test('agents cannot imitate a provider or pick the alert host', async () => {
+  const { service } = sandbox();
+  const client = await connect(service);
+  const refused = await call(client, 'create_webhook_trap', { tokenPrefix: 'sk_live_' });
+  assert.ok(refused.isError);
+  assert.match(refused.text, /imitates Stripe/);
+  const { tools } = await client.listTools();
+  const create = tools.find((t) => t.name === 'create_webhook_trap')!;
+  assert.deepEqual(Object.keys(create.inputSchema.properties ?? {}).sort(), ['label', 'pathPrefix', 'tokenCharset', 'tokenLength', 'tokenPrefix']);
+  await client.close();
+});
+
+test('AWS trap through MCP: create, plant, check, rotate, clean', async () => {
+  const { write, read, service, aws } = sandbox();
+  const client = await connect(service);
+
+  const created = await call(client, 'create_aws_trap', { userName: 'svc-billing-export', label: 'old export job' });
+  const { id, accessKeyId, secretAccessKey, accountId } = created.json;
+  assert.equal(accountId, aws.account);
+  write('deploy/legacy/export.env', `AWS_ACCESS_KEY_ID=${accessKeyId}\nAWS_SECRET_ACCESS_KEY=${secretAccessKey}\n`);
+  await call(client, 'register_planted_token', { id, file: 'deploy/legacy/export.env' });
+
+  const [checked] = (await call(client, 'check_traps')).json;
+  assert.deepEqual([checked.needsAttention, checked.aws], [false, { key: 'Active', denyPolicy: true }]);
+
+  const rotated = (await call(client, 'rotate_trap', { id })).json;
+  assert.ok(!read('deploy/legacy/export.env').includes(accessKeyId));
+  const listed = (await call(client, 'list_traps', { includeRetired: true })).json;
+  assert.deepEqual(listed.map((t: { id: string; status: string }) => [t.id, t.status]), [[id, 'retired'], [rotated.newId, 'active']]);
+  assert.ok(!JSON.stringify(listed).includes(secretAccessKey), 'list_traps never returns secrets');
+
+  assert.ok((await call(client, 'create_aws_trap', { userName: 'honeypot-user' })).isError);
+  await client.close();
+});
+
 test('rejects malformed input before touching the registry', async () => {
   const { home, service } = sandbox();
   const client = await connect(service);
@@ -105,11 +140,14 @@ test('`honeytoken mcp` speaks MCP over stdio and stores data in HONEYTOKEN_HOME'
 
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map((t) => t.name).sort(), [
+    'check_traps',
     'clean_traps',
+    'create_aws_trap',
     'create_webhook_trap',
     'list_alerts',
     'list_traps',
     'register_planted_token',
+    'rotate_trap',
   ]);
 
   await call(client, 'create_webhook_trap');

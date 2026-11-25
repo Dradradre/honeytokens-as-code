@@ -1,7 +1,10 @@
 export type TrapStatus = 'active' | 'retired';
 
-/** What in a request gave a trap away: its id (part of the URL) or its token. */
-export type MatchReason = 'url' | 'token';
+/**
+ * What gave a trap away: its id (part of a webhook URL), its token sent to the alert
+ * server, or its AWS access key showing up in CloudTrail.
+ */
+export type MatchReason = 'url' | 'token' | 'cloudtrail';
 
 export interface Placement {
   /** Absolute path of the repository root. */
@@ -12,12 +15,9 @@ export interface Placement {
   plantedAt: string;
 }
 
-export interface Trap {
+interface TrapBase {
   id: string;
-  kind: 'webhook';
   label: string;
-  url: string;
-  token: string;
   /**
    * Retired traps are gone from the working tree but still watched: old clones and
    * git history keep the decoy alive, and a hit on one is the leak you most want to see.
@@ -27,6 +27,37 @@ export interface Trap {
   retiredAt?: string;
   placements: Placement[];
 }
+
+/** How a webhook trap was shaped, kept so `rotate` can issue a look-alike. */
+export interface WebhookSpec {
+  pathPrefix: string;
+  tokenPrefix: string;
+  tokenLength: number;
+  tokenCharset: 'alnum' | 'hex';
+}
+
+/** A URL on your alert server plus a fake token; fires when either reaches the server. */
+export interface WebhookTrap extends TrapBase {
+  kind: 'webhook';
+  url: string;
+  token: string;
+  spec?: WebhookSpec;
+}
+
+/**
+ * A real AWS access key for an IAM user with no permissions (an explicit deny-all policy),
+ * in an account you control. It passes an intruder's validity check, and every use lands
+ * in CloudTrail, where `honeytoken serve` finds it.
+ */
+export interface AwsTrap extends TrapBase {
+  kind: 'aws';
+  userName: string;
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+export type Trap = WebhookTrap | AwsTrap;
 
 export interface Alert {
   trapId: string;

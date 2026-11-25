@@ -6,8 +6,10 @@ For the playbook agents follow when **using** honeytoken-mcp in someone else's r
 
 ## What this project is
 
-honeytoken-mcp lets a coding agent plant realistic decoy credentials and URLs in a repo and alerts the owner
-when one is used. The split of work is the whole design:
+honeytoken-mcp lets a coding agent plant realistic decoy credentials in a repo and alerts the owner when one
+is used. Two kinds of trap: **AWS** (a real access key for an IAM user with an explicit deny-all policy, found in
+CloudTrail when used; the established canary design) and **webhook** (a URL on the alert server plus a token,
+dressed as an internal service). The split of work is the whole design:
 
 - **The agent is the brain.** It reads the repo, chooses names and spots, and edits files.
 - **This tool is the hands.** It issues traps, verifies placements, keeps the registry, receives hits and
@@ -18,23 +20,25 @@ when one is used. The split of work is the whole design:
 ```
 src/
   core/            Web-standard APIs only. Runs on Node, Cloudflare Workers, Deno, Bun.
-    types.ts       Trap, Placement, Alert, Notifier
-    trap.ts        generateTrap(): ids, URLs, tokens (Web Crypto)
-    match.ts       lineHasTrap(), trapsIn()
+    types.ts       Trap = WebhookTrap | AwsTrap, Placement, Alert, Notifier
+    trap.ts        generateWebhookTrap(), PROVIDER_PREFIXES, assertNoTell() (Web Crypto)
+    match.ts       trapMarkers(), lineHasTrap(), trapsIn()
     handle.ts      handle(Request) -> Response, emits Alerts
     format.ts      formatAlert(), describePlacements()
     index.ts       public API, exported as `honeytoken-mcp/core`
   notify/          one file per channel + index.ts (dispatcher, cooldown, notifiersFromEnv)
-  store.ts         ~/.honeytoken: registry.json (locked, atomic) and alerts.jsonl
-  service.ts       createService(): issue / register / list / clean / alerts. Every rule lives here.
-  server.ts        node:http adapter around core/handle
+  store.ts         ~/.honeytoken: registry.json (locked, atomic), alerts.jsonl, cloudtrail.json
+  aws.ts           AWS through the user's `aws` CLI: issue, rotate, delete, status, CloudTrail polling
+  service.ts       createService(): issue / issueAws / register / list / check / rotate / clean / alerts.
+                   Every rule lives here.
+  server.ts        node:http adapter around core/handle, plus the CloudTrail watcher
   mcp.ts, cli.ts   thin shells over the service
 skills/honeytoken-planting/SKILL.md   agent playbook shipped with the package
 test/              node:test suites, one per layer, plus helpers.ts (sandbox repo + home)
 assets/            README art (hand-written SVG)
 ```
 
-Dependencies point one way: `cli / mcp / server -> service -> store -> core`, and `notify -> core`.
+Dependencies point one way: `cli / mcp / server -> service -> aws, store -> core`, and `notify -> core`.
 `core` imports nothing outside `core`.
 
 | Seam | Contract | To extend |
@@ -42,9 +46,11 @@ Dependencies point one way: `cli / mcp / server -> service -> store -> core`, an
 | Alert channel | `Notifier = (alert) => Promise<void>` | add `src/notify/<name>.ts`, wire it in `notifiersFromEnv` |
 | Runtime | `handle(Request, { traps, onAlert, clientIp }) => Response` | write an adapter like `server.ts` (e.g. a Worker) |
 | Entry point | `createService()` | call it; never reach into `store.ts` from a shell |
+| AWS access | `AwsRunner = (args) => Promise<json>` | `awsCli()` in production, `fakeAws()` in tests |
+| Trap kind | `Trap` is a discriminated union on `kind` | add a variant to `types.ts`, a case to `trapMarkers`, `replacements` and `list`; issuing lives in its own module like `aws.ts` |
 
-Not abstracted on purpose: trap kinds (only `webhook` exists; extract an interface when the second kind
-lands) and storage (one JSON file; `store.ts` is plain functions).
+Not abstracted on purpose: trap kinds stay a union with `switch`es rather than an interface of objects (two
+kinds, a handful of behaviours), and storage stays one JSON file (`store.ts` is plain functions).
 
 ## Commands
 
@@ -65,7 +71,7 @@ Run `npm run typecheck && npm test` before calling a change done.
 - Erasable syntax only (`erasableSyntaxOnly`): no `enum`, `namespace` or constructor parameter properties.
 - `src/core` must not use `node:` modules, `Buffer` or `process`. A test enforces it.
 - Runtime dependencies are the MCP SDK and zod, imported only by `src/mcp.ts`, which the CLI loads lazily.
-  Add another only with a strong reason.
+  AWS goes through the user's `aws` CLI, not an SDK. Add a dependency only with a strong reason.
 - Plain functions over classes. Add an interface only where a second implementation exists or is the point
   of the seam (see the table above).
 - Comments explain why, not what.
@@ -94,6 +100,13 @@ Run `npm run typecheck && npm test` before calling a change done.
     window, a capped address map, and an alert log that rotates at `MAX_ALERT_LOG_BYTES`.
 12. **Client addresses come from the socket** unless the operator names a header with `--trust-proxy`.
     `X-Forwarded-For` is read from the right: the hop our proxy appended, not what the client wrote.
+13. **No fake provider keys.** `generateWebhookTrap` refuses `PROVIDER_PREFIXES` unless the operator passes
+    `allowProviderPrefix` (CLI only; never exposed to agents). Names the intruder sees pass `assertNoTell`.
+14. **AWS canaries can never do anything.** The deny-all inline policy is attached before the access key is
+    created; a half-finished issue deletes the user. `check` reports a missing policy.
+15. **AWS stays untouched without AWS traps.** The CloudTrail watcher only runs the CLI when the registry
+    holds an AWS trap. Retired AWS keys stay alive (they are still bait); only never-planted ones are deleted,
+    and an IAM user is deleted only when no other trap uses it.
 
 ## Tests
 
@@ -102,6 +115,9 @@ Run `npm run typecheck && npm test` before calling a change done.
 - Core is tested with plain `Request` objects, no sockets. Servers listen on port 0. MCP tools go through
   `InMemoryTransport`, plus one stdio round trip of the real CLI.
 - Notifiers take an injectable `fetch`; tests must never reach a real webhook.
+- AWS goes through `fakeAws()` from `test/helpers.ts` (the default in `sandbox()`); tests must never reach a
+  real AWS account. `awsCli` itself is tested against a fake executable.
+- `npm run typecheck` covers `test/` too (`tsconfig.test.json`): Node strips types without checking them.
 - New behaviour gets a test; a bug fix gets a test that failed before the fix.
 
 ## When you change...

@@ -27,7 +27,7 @@ test('node adapter: live and retired traps alert, noise does not, new traps need
     const second = service.issue({}); // created while the server runs
     await fetch(`${base}/x?key=${second.token}`);
 
-    service.clean([first.id]); // retired, still watched
+    await service.clean([first.id]); // retired, still watched
     await fetch(base + new URL(first.url).pathname);
     await settle();
   } finally {

@@ -1,6 +1,6 @@
 {
   "name": "honeytoken-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Plant context-aware honeytokens in your repo through your coding agent, and get alerted when they are used.",
   "license": "MIT",
   "type": "module",
@@ -31,7 +31,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "dev": "node src/cli.ts",
     "test": "node --test \"test/*.test.ts\"",
     "prepare": "tsc"

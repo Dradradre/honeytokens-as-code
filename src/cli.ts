@@ -12,22 +12,31 @@ import { VERSION } from './version.ts';
 const USAGE = `Usage: honeytoken <command> [options]
 
 Commands:
-  create                 Issue a new webhook trap (prints JSON)
-      --label <text>         note for yourself, e.g. "billing .env"
+  create [webhook]       Issue a webhook trap (prints JSON)
+      --label <text>         note for yourself, e.g. "payments gateway key"
       --path-prefix <path>   URL path before the trap id (default /v1/hooks)
-      --token-prefix <str>   token prefix matching the repo, e.g. sk_live_
+      --token-prefix <str>   prefix in the repo's internal style, e.g. pgw_live_
       --token-length <n>     random part length, 16-128 (default 32)
       --charset alnum|hex    random part alphabet (default alnum)
       --base-url <url>       alert server URL (env HONEYTOKEN_BASE_URL, default http://127.0.0.1:8787)
+      --allow-provider-prefix  let the token imitate a known provider (not recommended)
+  create aws             Create a powerless IAM user + access key with your AWS CLI (prints JSON)
+      --user-name <name>     IAM user name that fits the repo, e.g. svc-billing-export
+      --label <text>
   register <id> <file>   Record where a trap was planted (lines are found automatically)
       --line <n>             fail unless the trap is on this line
   list                   Show active traps (--all to include retired, --json for raw)
+  check                  Are traps still planted, due for rotation, AWS keys intact? Exit 1 if not.
+      --max-age <days>       rotation age (default 180); --json for raw
+  rotate <id>            Replace a planted trap with a fresh one in the same lines; the old one is retired
   clean <id...> | --all  Remove planted lines and retire the traps (--dry-run to preview)
   alerts                 Show recent alerts (--limit n, default 20; --json for raw)
   serve                  Run the alert server (--host, --port; default 127.0.0.1:8787)
       --cooldown <sec>       quiet period per trap and address (default 600)
       --trust-proxy <hdr>    take the client address from this header set by your proxy:
                              x-forwarded-for (one proxy), cf-connecting-ip, x-real-ip
+      --aws-poll <sec>       how often to search CloudTrail for AWS trap use (default 300, 0 = off)
+      --aws-regions <list>   comma-separated regions (default: every enabled region)
                          Forwards to HONEYTOKEN_SLACK_WEBHOOK / HONEYTOKEN_DISCORD_WEBHOOK if set
   mcp                    Run the MCP server on stdio (for Claude Code, Cursor, ...)
   install-skill          Copy the agent skill to ~/.claude/skills/honeytoken-planting
@@ -57,6 +66,11 @@ const { values: opt, positionals } = parseArgs({
     port: { type: 'string' },
     cooldown: { type: 'string' },
     'trust-proxy': { type: 'string' },
+    'allow-provider-prefix': { type: 'boolean' },
+    'user-name': { type: 'string' },
+    'max-age': { type: 'string' },
+    'aws-poll': { type: 'string' },
+    'aws-regions': { type: 'string' },
     version: { type: 'boolean', short: 'v' },
     dir: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
@@ -80,6 +94,13 @@ async function main(): Promise<void> {
   if (opt.version) return console.log(VERSION);
   switch (command) {
     case 'create': {
+      const [kind = 'webhook'] = args;
+      if (kind === 'aws') {
+        if (!opt['user-name']) throw new Error('usage: honeytoken create aws --user-name <name> [--label text]');
+        console.log(JSON.stringify(await service.issueAws({ userName: opt['user-name'], label: opt.label }), null, 2));
+        return;
+      }
+      if (kind !== 'webhook') throw new Error(`unknown trap kind "${kind}": use webhook or aws`);
       if (opt.charset && opt.charset !== 'alnum' && opt.charset !== 'hex') {
         throw new Error('--charset must be alnum or hex');
       }
@@ -89,6 +110,7 @@ async function main(): Promise<void> {
         tokenPrefix: opt['token-prefix'],
         tokenLength: toInt(opt['token-length'], 'token-length'),
         tokenCharset: opt.charset as 'alnum' | 'hex' | undefined,
+        allowProviderPrefix: opt['allow-provider-prefix'],
       });
       if (issued.warning) console.error(`warning: ${issued.warning}`);
       console.log(JSON.stringify({ id: issued.id, url: issued.url, token: issued.token }, null, 2));
@@ -108,8 +130,8 @@ async function main(): Promise<void> {
       if (opt.json) return console.log(JSON.stringify(traps, null, 2));
       if (traps.length === 0) return console.log(`no traps in ${service.home}`);
       for (const t of traps) {
-        console.log(`${t.id}  ${t.label || '-'}${t.status === 'retired' ? '  [retired]' : ''}`);
-        console.log(`  url:     ${t.url}`);
+        console.log(`${t.id}  ${t.kind}  ${t.label || '-'}${t.status === 'retired' ? '  [retired]' : ''}`);
+        console.log(`  target:  ${t.target}`);
         console.log(`  planted: ${t.plantedIn.join(', ') || '(not planted yet)'}`);
       }
       return;
@@ -118,7 +140,7 @@ async function main(): Promise<void> {
     case 'clean': {
       if (!opt.all && args.length === 0) throw new Error('usage: honeytoken clean <id...> | --all [--dry-run]');
       const dryRun = opt['dry-run'] ?? false;
-      const results = service.clean(opt.all ? 'all' : args, { dryRun });
+      const results = await service.clean(opt.all ? 'all' : args, { dryRun });
       for (const r of results) {
         console.log(`${r.id}  ${r.label || '-'}`);
         for (const f of r.removed) console.log(`  ${dryRun ? 'would remove' : 'removed'} ${f.file} line ${f.lines.join(', ')}`);
@@ -128,6 +150,32 @@ async function main(): Promise<void> {
       }
       const retired = results.filter((r) => !r.forgotten).length;
       if (!dryRun) console.log(`retired ${retired} trap(s); they keep alerting if an old copy is used`);
+      return;
+    }
+
+    case 'check': {
+      const results = await service.check({ maxAgeDays: toInt(opt['max-age'], 'max-age') });
+      if (opt.json) console.log(JSON.stringify(results, null, 2));
+      else if (results.length === 0) console.log('no active traps');
+      for (const r of opt.json ? [] : results) {
+        const flags = [r.needsAttention && 'NEEDS ATTENTION', r.rotationDue && 'rotation due'].filter(Boolean).join(', ');
+        console.log(`${r.id}  ${r.kind}  ${r.label || '-'}  ${r.ageDays}d${flags ? `  [${flags}]` : ''}`);
+        if (r.files.length === 0) console.log('  not planted anywhere');
+        for (const f of r.files) console.log(`  ${f.state.padEnd(7)} ${f.file}${f.lines.length ? `:${f.lines.join(',')}` : ''}`);
+        if (r.aws) console.log(`  aws     ${'error' in r.aws ? `error: ${r.aws.error}` : `key ${r.aws.key}, deny-all policy ${r.aws.denyPolicy ? 'present' : 'MISSING'}`}`);
+      }
+      if (results.some((r) => r.needsAttention)) process.exitCode = 1;
+      return;
+    }
+
+    case 'rotate': {
+      const [id] = args;
+      if (!id) throw new Error('usage: honeytoken rotate <id>');
+      const r = await service.rotate(id);
+      console.log(`rotated ${r.oldId} -> ${r.newId} (the old trap is retired and still watched)`);
+      for (const f of r.files) console.log(`  updated ${f.file} line ${f.lines.join(', ')}`);
+      for (const f of r.missing) console.log(`  missing ${f} (skipped)`);
+      for (const f of r.refused) console.log(`  refused ${f}: it now resolves outside its repository`);
       return;
     }
 
@@ -145,12 +193,23 @@ async function main(): Promise<void> {
       const cooldown = toInt(opt.cooldown, 'cooldown');
       const trustProxy = opt['trust-proxy'];
       if (trustProxy !== undefined && !/^[A-Za-z0-9-]+$/.test(trustProxy)) throw new Error('--trust-proxy takes a header name');
+      const awsPoll = toInt(opt['aws-poll'], 'aws-poll') ?? 300;
+      const awsRegions = opt['aws-regions']?.split(',').map((r) => r.trim()).filter(Boolean);
       const { serve } = await import('./server.ts');
-      await serve({ home: service.home, host, port, trustProxy, cooldownMs: cooldown === undefined ? undefined : cooldown * 1000 });
+      await serve({
+        home: service.home,
+        host,
+        port,
+        trustProxy,
+        cooldownMs: cooldown === undefined ? undefined : cooldown * 1000,
+        awsPollMs: awsPoll * 1000,
+        awsRegions,
+      });
       const webhooks = notifiersFromEnv().length - 1; // minus the console
       console.log(`honeytoken alert server on http://${host}:${port}`);
       console.log(`home: ${service.home}`);
       console.log(`client address: ${trustProxy ? `${trustProxy} header (trusted proxy)` : 'TCP peer'}`);
+      console.log(`AWS traps: ${awsPoll ? `CloudTrail searched every ${awsPoll}s${awsRegions ? ` in ${awsRegions.join(', ')}` : ''}` : 'not watched'}`);
       console.log(`forwarding: ${webhooks ? `console + ${webhooks} webhook(s)` : 'console only'}\n`);
       return;
     }

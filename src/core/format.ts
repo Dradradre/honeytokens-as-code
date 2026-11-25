@@ -1,5 +1,14 @@
 import type { Alert, Placement } from './types.ts';
 
+const MAX_FIELD = 300;
+
+/** Attacker-supplied text on one line and at most MAX_FIELD characters. */
+export function clip(value: string | null | undefined): string | undefined {
+  if (value == null) return undefined;
+  const flat = String(value).replace(/[\r\n]+/g, ' ');
+  return flat.length > MAX_FIELD ? flat.slice(0, MAX_FIELD) + '...' : flat;
+}
+
 /** "acme-payments/deploy/legacy/billing.env": repo directory name plus the path inside it. */
 export function placementFile(p: Placement): string {
   const repoName = p.repo.split(/[\\/]/).filter(Boolean).pop() ?? p.repo;

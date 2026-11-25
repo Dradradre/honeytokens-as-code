@@ -48,7 +48,7 @@
     <path d="M987.7 198.0 V282 H967.6537180435969" fill="none" stroke="#FF4D4F" stroke-opacity=".7" stroke-dasharray="3 4"/>
     <rect x="657.6537180435969" y="264" width="310" height="34" rx="8" fill="#1A0F12" stroke="#FF4D4F" stroke-opacity=".8"/>
     <circle cx="675.6537180435969" cy="281" r="4" fill="#FF4D4F"/>
-    <text x="689.6537180435969" y="286" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#FFB3B4">deploy/legacy/billing.env:7</text>
+    <text x="689.6537180435969" y="286" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#FFB3B4">deploy/legacy/export.env:7</text>
   </g>
 
   <text x="64" y="112" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" fill="#7D8590">MCP server + Agent Skill + alert server</text>

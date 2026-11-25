@@ -1,8 +1,9 @@
 import http from 'node:http';
+import { awsCli, listRegions, pollCloudTrail, type AwsRunner, type CloudTrailCursor } from './aws.ts';
 import { handle, resolveClientIp } from './core/handle.ts';
-import type { Alert, Trap } from './core/types.ts';
+import type { Alert, AwsTrap, Trap } from './core/types.ts';
 import { createDispatcher, notifiersFromEnv } from './notify/index.ts';
-import { appendAlert, readRegistry } from './store.ts';
+import { appendAlert, readRegistry, readState, writeState } from './store.ts';
 
 export interface ServeOptions {
   home: string;
@@ -16,6 +17,11 @@ export interface ServeOptions {
   trustProxy?: string;
   /** Replaces the default pipeline (alerts.jsonl + cooldown + env-configured notifiers). */
   onAlert?: (alert: Alert) => void | Promise<void>;
+  /** How often to look for AWS trap use in CloudTrail. Default 5 minutes; 0 turns it off. */
+  awsPollMs?: number;
+  /** Regions to search. Default: every region enabled in the account. */
+  awsRegions?: string[];
+  aws?: AwsRunner;
 }
 
 const MAX_BODY = 64 * 1024;
@@ -35,7 +41,7 @@ export function serve(opts: ServeOptions): Promise<http.Server> {
       const request = await toRequest(req);
       const response = await handle(request, {
         traps: () => loadTraps(opts.home),
-        onAlert: (alert) => void Promise.resolve(onAlert(alert)).catch((err) => console.error('[honeytoken] alert failed:', err)),
+        onAlert: (alert) => deliver(alert),
         clientIp: resolveClientIp(request.headers, req.socket.remoteAddress ?? '', opts.trustProxy),
       });
       res.writeHead(response.status, Object.fromEntries(response.headers));
@@ -47,10 +53,65 @@ export function serve(opts: ServeOptions): Promise<http.Server> {
     }
   });
 
+  const deliver = (alert: Alert) =>
+    void Promise.resolve(onAlert(alert)).catch((err) => console.error('[honeytoken] alert failed:', err));
+  const awsPollMs = opts.awsPollMs ?? 5 * 60_000;
+  if (awsPollMs > 0) {
+    const stop = watchCloudTrail({ home: opts.home, aws: opts.aws ?? awsCli(), intervalMs: awsPollMs, regions: opts.awsRegions, onAlert: deliver });
+    server.on('close', stop);
+  }
+
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(opts.port ?? 8787, opts.host ?? '127.0.0.1', () => resolve(server));
   });
+}
+
+const CURSOR_FILE = 'cloudtrail.json';
+
+/**
+ * Poll CloudTrail event history for every AWS trap, active or retired. Only runs the AWS CLI
+ * when the registry actually holds AWS traps, so webhook-only users never need it.
+ */
+function watchCloudTrail(o: {
+  home: string;
+  aws: AwsRunner;
+  intervalMs: number;
+  regions?: string[];
+  onAlert: (alert: Alert) => void;
+}): () => void {
+  let regions = o.regions;
+  let timer: NodeJS.Timeout | undefined;
+  let stopped = false;
+
+  const tick = async () => {
+    try {
+      const traps = loadTraps(o.home).filter((t): t is AwsTrap => t.kind === 'aws');
+      if (traps.length > 0) {
+        if (!regions) {
+          regions = await listRegions(o.aws).catch((err: Error) => {
+            console.error(`[honeytoken] cannot list AWS regions (${err.message}); searching us-east-1 only for now`);
+            return undefined;
+          });
+        }
+        const earliest = traps.map((t) => t.createdAt).sort()[0]!;
+        const cursor = readState<CloudTrailCursor>(o.home, CURSOR_FILE, { since: earliest, seen: {} });
+        const result = await pollCloudTrail(o.aws, regions ?? ['us-east-1'], traps, cursor);
+        writeState(o.home, CURSOR_FILE, result.cursor);
+        for (const alert of result.alerts) o.onAlert(alert);
+        for (const error of result.errors) console.error(`[honeytoken] CloudTrail lookup failed in ${error}`);
+      }
+    } catch (err) {
+      console.error('[honeytoken] CloudTrail poll failed:', err);
+    }
+    if (!stopped) timer = setTimeout(tick, o.intervalMs).unref();
+  };
+
+  timer = setTimeout(tick, 0).unref();
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
 }
 
 function loadTraps(home: string): Trap[] {
