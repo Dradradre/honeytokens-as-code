@@ -1,56 +1,62 @@
-<svg class="term" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 608" width="100%" role="img" aria-label="Demo: the agent reads the repo, creates a powerless AWS key, plants it in deploy/legacy/export.env and registers it. 19 days later CloudTrail shows the key in use and the alert names the leaked file.">
+<svg class="term" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 680" width="100%" role="img" aria-label="Recorded from a real run: Claude Code reads a demo payments repo, creates an AWS trap and a webhook trap, plants them in infra/old/values.staging.yaml and deploy/legacy/gateway.staging.env, and registers them. An intruder then uses the AWS key and the alert names the leaked file. The AWS part ran against a local AWS emulator.">
 <style>
   .term text { font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 14.5px; }
-  .ln { opacity: 0; animation-duration: 18s; animation-iteration-count: infinite; animation-timing-function: ease-out; }
-  @keyframes l0{0%,1.67%{opacity:0;transform:translateX(-6px)}2.87%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l2{0%,6.67%{opacity:0;transform:translateX(-6px)}7.87%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l3{0%,10.00%{opacity:0;transform:translateX(-6px)}11.20%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l4{0%,13.33%{opacity:0;transform:translateX(-6px)}14.53%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l5{0%,18.33%{opacity:0;transform:translateX(-6px)}19.53%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l6{0%,21.11%{opacity:0;transform:translateX(-6px)}22.31%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l7{0%,26.11%{opacity:0;transform:translateX(-6px)}27.31%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l8{0%,28.33%{opacity:0;transform:translateX(-6px)}29.53%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l9{0%,30.00%{opacity:0;transform:translateX(-6px)}31.20%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l10{0%,31.67%{opacity:0;transform:translateX(-6px)}32.87%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l11{0%,36.67%{opacity:0;transform:translateX(-6px)}37.87%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l12{0%,41.11%{opacity:0;transform:translateX(-6px)}42.31%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l14{0%,48.89%{opacity:0;transform:translateX(-6px)}50.09%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l16{0%,55.56%{opacity:0;transform:translateX(-6px)}56.76%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l17{0%,57.22%{opacity:0;transform:translateX(-6px)}58.42%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l18{0%,58.89%{opacity:0;transform:translateX(-6px)}60.09%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l19{0%,60.56%{opacity:0;transform:translateX(-6px)}61.76%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  @keyframes l20{0%,62.22%{opacity:0;transform:translateX(-6px)}63.42%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
-  .alert { opacity: 0; animation: alert 18s infinite; }
-  @keyframes alert { 0%, 55.26% { opacity: 0; } 55.56% { opacity: 1; } 57.06% { opacity: .35; } 58.56%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
+  .ln { opacity: 0; animation-duration: 22s; animation-iteration-count: infinite; animation-timing-function: ease-out; }
+  @keyframes l0{0%,1.36%{opacity:0;transform:translateX(-6px)}2.56%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l2{0%,4.55%{opacity:0;transform:translateX(-6px)}5.75%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l3{0%,7.27%{opacity:0;transform:translateX(-6px)}8.47%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l4{0%,10.00%{opacity:0;transform:translateX(-6px)}11.20%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l5{0%,13.64%{opacity:0;transform:translateX(-6px)}14.84%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l6{0%,15.91%{opacity:0;transform:translateX(-6px)}17.11%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l7{0%,19.55%{opacity:0;transform:translateX(-6px)}20.75%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l8{0%,20.91%{opacity:0;transform:translateX(-6px)}22.11%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l9{0%,22.27%{opacity:0;transform:translateX(-6px)}23.47%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l10{0%,23.64%{opacity:0;transform:translateX(-6px)}24.84%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l11{0%,26.82%{opacity:0;transform:translateX(-6px)}28.02%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l12{0%,28.18%{opacity:0;transform:translateX(-6px)}29.38%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l13{0%,29.55%{opacity:0;transform:translateX(-6px)}30.75%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l14{0%,33.18%{opacity:0;transform:translateX(-6px)}34.38%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l15{0%,36.36%{opacity:0;transform:translateX(-6px)}37.56%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l17{0%,42.73%{opacity:0;transform:translateX(-6px)}43.93%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l19{0%,48.18%{opacity:0;transform:translateX(-6px)}49.38%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l20{0%,49.55%{opacity:0;transform:translateX(-6px)}50.75%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l21{0%,50.91%{opacity:0;transform:translateX(-6px)}52.11%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l22{0%,52.27%{opacity:0;transform:translateX(-6px)}53.47%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  @keyframes l23{0%,53.64%{opacity:0;transform:translateX(-6px)}54.84%,93%{opacity:1;transform:none}97%,100%{opacity:0}}
+  .alert { opacity: 0; animation: alert 22s infinite; }
+  @keyframes alert { 0%, 47.88% { opacity: 0; } 48.18% { opacity: 1; } 49.68% { opacity: .35; } 51.18%, 93% { opacity: 1; } 97%, 100% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .ln, .alert { animation: none; opacity: 1; } }
 </style>
-<rect x=".5" y=".5" width="999" height="607" rx="14" fill="#0A0C10" stroke="#232A35"/>
+<rect x=".5" y=".5" width="999" height="679" rx="14" fill="#0A0C10" stroke="#232A35"/>
 <path d="M.5 40 H999.5" stroke="#232A35"/>
 <circle cx="24" cy="20" r="6" fill="#FF5F57"/><circle cx="44" cy="20" r="6" fill="#FEBC2E"/><circle cx="64" cy="20" r="6" fill="#28C840"/>
-<text x="500" y="25" text-anchor="middle" fill="#7D8590" style="font-size:13px">claude — ~/acme-payments</text>
+<text x="500" y="25" text-anchor="middle" fill="#7D8590" style="font-size:13px">claude — ~/acme-payments  ·  recorded from a real run</text>
 <g class="alert">
-  <rect x="18" y="436" width="964" height="132" rx="8" fill="#FF4D4F" fill-opacity=".07" stroke="#FF4D4F" stroke-opacity=".45"/>
-  <rect x="18" y="436" width="4" height="132" rx="2" fill="#FF4D4F"/>
+  <rect x="18" y="508" width="964" height="132" rx="8" fill="#FF4D4F" fill-opacity=".07" stroke="#FF4D4F" stroke-opacity=".45"/>
+  <rect x="18" y="508" width="4" height="132" rx="2" fill="#FF4D4F"/>
 </g>
-  <text class="ln" style="animation-name:l0" x="32" y="70" xml:space="preserve"><tspan fill="#F5A524" font-weight="700">› </tspan><tspan fill="#E6EDF3" font-weight="700">plant honeytokens in this repo</tspan></text>
+  <text class="ln" style="animation-name:l0" x="32" y="70" xml:space="preserve"><tspan fill="#F5A524" font-weight="700">› </tspan><tspan fill="#E6EDF3" font-weight="700">plant honeytokens in this repo: one AWS trap and one webhook trap</tspan></text>
   
-  <text class="ln" style="animation-name:l2" x="32" y="118" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Read </tspan><tspan fill="#7D8590">.env.example  config/  deploy/  terraform/  src/</tspan></text>
-  <text class="ln" style="animation-name:l3" x="32" y="142" xml:space="preserve"><tspan fill="#7D8590">  AWS via boto3, service users named svc-&lt;team&gt;-&lt;job&gt;, SCREAMING_SNAKE env vars</tspan></text>
-  <text class="ln" style="animation-name:l4" x="32" y="166" xml:space="preserve"><tspan fill="#7D8590">  deploy/legacy/ is not loaded by any code path → safe spot</tspan></text>
-  <text class="ln" style="animation-name:l5" x="32" y="190" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">create_aws_trap</tspan><tspan fill="#7D8590">   userName </tspan><tspan fill="#E6EDF3">svc-billing-export</tspan></text>
-  <text class="ln" style="animation-name:l6" x="32" y="214" xml:space="preserve"><tspan fill="#7D8590">  real key, explicit deny-all policy, nothing it can touch</tspan></text>
-  <text class="ln" style="animation-name:l7" x="32" y="238" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Update </tspan><tspan fill="#7D8590">deploy/legacy/export.env</tspan></text>
-  <text class="ln" style="animation-name:l8" x="32" y="262" xml:space="preserve"><tspan fill="#4A5361">  6 </tspan><tspan fill="#3DDC97">+ # Legacy export job (replaced by the data platform). Kept for backfills.</tspan></text>
-  <text class="ln" style="animation-name:l9" x="32" y="286" xml:space="preserve"><tspan fill="#4A5361">  7 </tspan><tspan fill="#3DDC97">+ AWS_ACCESS_KEY_ID=AKIA4M7QX2…</tspan></text>
-  <text class="ln" style="animation-name:l10" x="32" y="310" xml:space="preserve"><tspan fill="#4A5361">  8 </tspan><tspan fill="#3DDC97">+ AWS_SECRET_ACCESS_KEY=wJr8Xk2Lq9…</tspan></text>
-  <text class="ln" style="animation-name:l11" x="32" y="334" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">register_planted_token</tspan><tspan fill="#3DDC97">   ✓ found on lines 7, 8</tspan></text>
-  <text class="ln" style="animation-name:l12" x="32" y="358" xml:space="preserve"><tspan fill="#3DDC97" font-weight="700">✓ 1 trap armed. </tspan><tspan fill="#7D8590">Only the decoy lines changed in this repo.</tspan></text>
+  <text class="ln" style="animation-name:l2" x="32" y="118" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Skill </tspan><tspan fill="#7D8590">honeytoken-planting</tspan><tspan fill="#7D8590">   ·   </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">list_traps</tspan></text>
+  <text class="ln" style="animation-name:l3" x="32" y="142" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Read </tspan><tspan fill="#7D8590">.env.example  README.md  deploy/legacy/  docs/runbooks/  infra/old/</tspan></text>
+  <text class="ln" style="animation-name:l4" x="32" y="166" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Grep </tspan><tspan fill="#7D8590">AWS_ACCESS_KEY_ID|GATEWAY_API_KEY  → unused anywhere, safe names</tspan></text>
+  <text class="ln" style="animation-name:l5" x="32" y="190" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">create_aws_trap</tspan><tspan fill="#7D8590">      userName </tspan><tspan fill="#E6EDF3">svc-settlement-export-stg</tspan></text>
+  <text class="ln" style="animation-name:l6" x="32" y="214" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">create_webhook_trap</tspan><tspan fill="#7D8590">  pathPrefix </tspan><tspan fill="#E6EDF3">/api/v1/gateway</tspan><tspan fill="#7D8590">  tokenPrefix </tspan><tspan fill="#E6EDF3">gw_stg_</tspan></text>
+  <text class="ln" style="animation-name:l7" x="32" y="238" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Update </tspan><tspan fill="#7D8590">infra/old/values.staging.yaml</tspan></text>
+  <text class="ln" style="animation-name:l8" x="32" y="262" xml:space="preserve"><tspan fill="#4A5361">  9 </tspan><tspan fill="#3DDC97">+   # settlement export uploader</tspan></text>
+  <text class="ln" style="animation-name:l9" x="32" y="286" xml:space="preserve"><tspan fill="#4A5361"> 10 </tspan><tspan fill="#3DDC97">+   AWS_ACCESS_KEY_ID: AKIARZPUZDIK…</tspan></text>
+  <text class="ln" style="animation-name:l10" x="32" y="310" xml:space="preserve"><tspan fill="#4A5361"> 11 </tspan><tspan fill="#3DDC97">+   AWS_SECRET_ACCESS_KEY: QlYbdc5UQnRx…</tspan></text>
+  <text class="ln" style="animation-name:l11" x="32" y="334" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#E6EDF3">Update </tspan><tspan fill="#7D8590">deploy/legacy/gateway.staging.env</tspan></text>
+  <text class="ln" style="animation-name:l12" x="32" y="358" xml:space="preserve"><tspan fill="#4A5361">  4 </tspan><tspan fill="#3DDC97">+ GATEWAY_API_URL=http://127.0.0.1:18787/api/v1/gateway/efamiew7…</tspan></text>
+  <text class="ln" style="animation-name:l13" x="32" y="382" xml:space="preserve"><tspan fill="#4A5361">  5 </tspan><tspan fill="#3DDC97">+ GATEWAY_API_KEY=gw_stg_8gphEczEIZ5u…</tspan></text>
+  <text class="ln" style="animation-name:l14" x="32" y="406" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">register_planted_token ×2  ·  check_traps</tspan><tspan fill="#3DDC97">   ✓ all ok</tspan></text>
+  <text class="ln" style="animation-name:l15" x="32" y="430" xml:space="preserve"><tspan fill="#3DDC97" font-weight="700">✓ 2 traps armed in 56 s. </tspan><tspan fill="#7D8590">Only the decoy lines changed. Not committed.</tspan></text>
   
-  <text class="ln" style="animation-name:l14" x="32" y="406" xml:space="preserve"><tspan fill="#4A5361">──────────────────────────────────────  19 days later  ──────────────────────────────────────</tspan></text>
+  <text class="ln" style="animation-name:l17" x="32" y="478" xml:space="preserve"><tspan fill="#4A5361">──────────────────────  an intruder tries the leaked AWS key  ──────────────────────</tspan></text>
   
-  <text class="ln" style="animation-name:l16" x="32" y="454" xml:space="preserve"><tspan fill="#FF4D4F" font-weight="700">[honeytoken] trap triggered: legacy export key</tspan></text>
-  <text class="ln" style="animation-name:l17" x="32" y="478" xml:space="preserve"><tspan fill="#7D8590">trap:       </tspan><tspan fill="#E6EDF3">m2x8c4k9q0w7e5r1t3y6</tspan><tspan fill="#7D8590"> (matched cloudtrail)</tspan></text>
-  <text class="ln" style="animation-name:l18" x="32" y="502" xml:space="preserve"><tspan fill="#7D8590">planted in: </tspan><tspan fill="#FFD27A">acme-payments/deploy/legacy/export.env:7,8</tspan></text>
-  <text class="ln" style="animation-name:l19" x="32" y="526" xml:space="preserve"><tspan fill="#7D8590">request:    </tspan><tspan fill="#E6EDF3">AWS sts.amazonaws.com GetCallerIdentity (us-east-1)</tspan></text>
-  <text class="ln" style="animation-name:l20" x="32" y="550" xml:space="preserve"><tspan fill="#7D8590">from:       </tspan><tspan fill="#E6EDF3">203.0.113.47</tspan><tspan fill="#7D8590">    user-agent: </tspan><tspan fill="#E6EDF3">aws-cli/2.17.0</tspan></text>
+  <text class="ln" style="animation-name:l19" x="32" y="526" xml:space="preserve"><tspan fill="#FF4D4F" font-weight="700">[honeytoken] trap triggered: old staging uploader key in infra/old/values.staging.yaml</tspan></text>
+  <text class="ln" style="animation-name:l20" x="32" y="550" xml:space="preserve"><tspan fill="#7D8590">trap:       </tspan><tspan fill="#E6EDF3">fn9szhu6pofb6oo0k1wd</tspan><tspan fill="#7D8590"> (matched cloudtrail)</tspan></text>
+  <text class="ln" style="animation-name:l21" x="32" y="574" xml:space="preserve"><tspan fill="#7D8590">planted in: </tspan><tspan fill="#FFD27A">acme-payments/infra/old/values.staging.yaml:10,11</tspan></text>
+  <text class="ln" style="animation-name:l22" x="32" y="598" xml:space="preserve"><tspan fill="#7D8590">request:    </tspan><tspan fill="#E6EDF3">AWS s3.amazonaws.com ListBuckets -&gt; AccessDenied (ap-northeast-2)</tspan></text>
+  <text class="ln" style="animation-name:l23" x="32" y="622" xml:space="preserve"><tspan fill="#7D8590">suppressed: </tspan><tspan fill="#E6EDF3">1 more hit on this trap since the last alert</tspan><tspan fill="#7D8590">   → sent to Slack</tspan></text>
 </svg>

@@ -28,7 +28,44 @@
 
 <br>
 
-<img src="assets/demo.svg" alt="데모: 에이전트가 레포를 읽고 권한 없는 AWS 키를 만들어 deploy/legacy/export.env에 심고 등록한다. 19일 뒤 CloudTrail에 그 키 사용이 찍히고 경보가 유출된 파일을 가리킨다." width="100%">
+<img src="assets/demo.svg" alt="실제 실행 기록: Claude Code가 데모 결제 레포를 읽고 AWS 트랩과 웹훅 트랩을 만들어 infra/old/values.staging.yaml과 deploy/legacy/gateway.staging.env에 심고 등록한다. 침입자가 AWS 키를 쓰자 경보가 유출된 파일을 가리킨다." width="100%">
+
+<sub>실제 실행 기록입니다. 별도의 Claude Code 세션에 위 한 줄 요청과 스킬, MCP 서버만 주었고, 위치와 이름과 접두사는 에이전트가 직접 골랐습니다
+(56초, 20턴, 약 0.4달러). AWS 부분은 로컬 AWS 에뮬레이터에서 돌렸고, 경보는 실제 경보 서버를 거쳐 Slack 웹훅으로 나갔습니다.</sub>
+
+<details>
+<summary><b>그 실행에서 Slack으로 나간 메시지 3건</b></summary>
+
+```text
+[honeytoken] trap triggered: legacy gateway key in deploy/legacy/gateway.staging.env
+trap: efamiew7vhkcg1u83ku4 (matched url + token)
+planted in: acme-payments/deploy/legacy/gateway.staging.env:4,5
+request: `POST /api/v1/gateway/efamiew7vhkcg1u83ku4`
+from: `127.0.0.1`
+user-agent: `python-requests/2.32.3`
+at: 2026-11-25T04:50:11.187Z
+
+[honeytoken] trap triggered: old staging uploader key in infra/old/values.staging.yaml
+trap: fn9szhu6pofb6oo0k1wd (matched cloudtrail)
+planted in: acme-payments/infra/old/values.staging.yaml:10,11
+request: `AWS sts.amazonaws.com GetCallerIdentity (us-east-1)`
+from: `127.0.0.1`
+user-agent: `aws-cli/1.46.3 …`
+at: 2026-11-25T04:50:10.911Z
+
+[honeytoken] trap triggered: old staging uploader key in infra/old/values.staging.yaml
+trap: fn9szhu6pofb6oo0k1wd (matched cloudtrail)
+planted in: acme-payments/infra/old/values.staging.yaml:10,11
+request: `AWS s3.amazonaws.com ListBuckets -> AccessDenied (ap-northeast-2)`
+from: `127.0.0.1`
+user-agent: `aws-cli/1.46.3 …`
+suppressed: 1 more hits on this trap since the last alert
+at: 2026-11-25T04:50:11.156Z
+```
+
+세 번째는 쿨다운 요약 경보입니다. S3 시도가 같은 주소의 첫 호출 몇 초 뒤에 와서 묶였고, 버려지는 대신 창이 닫힐 때 요약으로 나갔습니다.
+
+</details>
 
 <br>
 
