@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { awsCli, pollCloudTrail, type CloudTrailCursor } from '../src/aws.ts';
+import { awsCli, eventTimeMs, pollCloudTrail, type CloudTrailCursor } from '../src/aws.ts';
 import type { Alert, AwsTrap } from '../src/core/types.ts';
 import { serve } from '../src/server.ts';
 import { readRegistry } from '../src/store.ts';
@@ -129,6 +129,26 @@ test('pollCloudTrail: every region, mapped fields, no duplicates across polls, f
   const partial = await pollCloudTrail(flaky.run, ['us-east-1', 'ap-northeast-2'], [trap], cursor, now);
   assert.equal(partial.cursor.since, cursor.since, 'a failed region keeps the window open');
   assert.match(partial.errors[0]!, /ap-northeast-2: throttled/);
+});
+
+test('event time is read in both AWS CLI formats (v1 epoch seconds, v2 ISO), never replaced by the poll time', async () => {
+  assert.equal(eventTimeMs(1795576025.219), 1795576025219);
+  assert.equal(eventTimeMs('1795576025.219'), 1795576025219);
+  assert.equal(eventTimeMs('2026-11-25T12:07:05.219+09:00'), Date.parse('2026-11-25T03:07:05.219Z'));
+  assert.ok(Number.isNaN(eventTimeMs(undefined)));
+
+  const aws = fakeAws();
+  const { service, write } = sandbox(undefined, aws);
+  const t = await service.issueAws({ userName: 'svc-export' });
+  write('a.env', `K=${t.accessKeyId}\n`);
+  service.register(t.id, 'a.env');
+  const happened = new Date(Date.now() - 20 * 60_000); // twenty minutes before the poll
+  aws.use(t.accessKeyId, { at: happened });
+  aws.events[0]!.event.EventTime = happened.getTime() / 1000; // as AWS CLI v1 prints it
+
+  const trap = readRegistry(service.home).traps[0] as AwsTrap;
+  const { alerts } = await pollCloudTrail(aws.run, ['us-east-1'], [trap], { since: new Date(Date.now() - 3_600_000).toISOString(), seen: {} });
+  assert.equal(alerts[0]?.at, happened.toISOString());
 });
 
 test('serve finds AWS trap use in CloudTrail and alerts like any other hit', async () => {

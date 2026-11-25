@@ -201,6 +201,16 @@ export async function pollCloudTrail(
   return { alerts, errors, cursor: { since: errors.length ? cursor.since : until, seen } };
 }
 
+/**
+ * AWS CLI v1 prints timestamps as epoch seconds by default (`1795576025.21`), v2 and
+ * `cli_timestamp_format = iso8601` as ISO strings. Accept both; NaN when neither.
+ */
+export function eventTimeMs(value: unknown): number {
+  if (typeof value === 'number') return value * 1000;
+  if (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value)) return Number(value) * 1000;
+  return typeof value === 'string' ? Date.parse(value) : Number.NaN;
+}
+
 function cloudTrailAlert(trap: AwsTrap, event: any, region: string): Alert {
   let detail: any = {};
   try {
@@ -210,7 +220,7 @@ function cloudTrailAlert(trap: AwsTrap, event: any, region: string): Alert {
   }
   const source = detail.eventSource ?? event.EventSource ?? 'unknown';
   const outcome = detail.errorCode ? ` -> ${detail.errorCode}` : '';
-  const at = Date.parse(event.EventTime);
+  const at = eventTimeMs(event.EventTime ?? detail.eventTime);
   return {
     trapId: trap.id,
     label: trap.label,

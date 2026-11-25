@@ -105,7 +105,8 @@ export function fakeAws(opts: { account?: string; regions?: string[]; fail?: (ar
         const Events = events
           .filter((e) => e.region === region && e.accessKeyId === key)
           .filter((e) => {
-            const t = Date.parse(String(e.event.EventTime));
+            const raw = e.event.EventTime;
+            const t = typeof raw === 'number' ? raw * 1000 : Date.parse(String(raw)); // CLI v1 prints epoch seconds
             return t >= from && t <= until;
           })
           .map((e) => e.event);
