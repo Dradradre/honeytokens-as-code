@@ -173,14 +173,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: \${{ secrets.HONEYTOKEN_AWS_ROLE }}
           aws-region: us-east-1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: .honeytoken
           key: honeytoken-state-\${{ github.run_id }}
@@ -192,7 +192,7 @@ jobs:
           HONEYTOKEN_WATCHLIST: \${{ secrets.HONEYTOKEN_WATCHLIST }}
           HONEYTOKEN_SLACK_WEBHOOK: \${{ secrets.HONEYTOKEN_SLACK_WEBHOOK }}
           HONEYTOKEN_DISCORD_WEBHOOK: \${{ secrets.HONEYTOKEN_DISCORD_WEBHOOK }}
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: always()
         with:
           path: .honeytoken
