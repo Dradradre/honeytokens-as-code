@@ -85,6 +85,6 @@ test('workflow template: pinned version, OIDC, cached cursor, watch --once, no d
   assert.match(yaml, /id-token: write/);
   assert.match(yaml, /role-to-assume: \$\{\{ secrets\.HONEYTOKEN_AWS_ROLE \}\}/);
   assert.match(yaml, /HONEYTOKEN_WATCHLIST: \$\{\{ secrets\.HONEYTOKEN_WATCHLIST \}\}/);
-  assert.match(yaml, /actions\/cache\/restore@v4[\s\S]*actions\/cache\/save@v4/);
+  assert.match(yaml, /actions\/cache\/restore@v6[\s\S]*actions\/cache\/save@v6/);
   assert.match(yaml, /PRIVATE ops repository/);
 });
