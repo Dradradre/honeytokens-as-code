@@ -1,15 +1,22 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { awsCli } from './aws.ts';
 import { formatAlert } from './core/format.ts';
-import { notifiersFromEnv } from './notify/index.ts';
+import { createDispatcher, notifiersFromEnv } from './notify/index.ts';
 import { createService } from './service.ts';
+import { iamPolicy, init, installSkill, workflowTemplate } from './setup.ts';
+import { appendAlert } from './store.ts';
+import { parseWatchlist, pollOnce, watchLoop, watchlistFromRegistry, type WatchedAwsTrap } from './watch.ts';
 import { VERSION } from './version.ts';
 
 const USAGE = `Usage: honeytoken <command> [options]
+
+Getting started:
+  init                   Install the agent skill, register the MCP server with Claude Code, check the AWS CLI
+      --dry-run              show what would happen
 
 Commands:
   create [webhook]       Issue a webhook trap (prints JSON)
@@ -38,6 +45,13 @@ Commands:
       --aws-poll <sec>       how often to search CloudTrail for AWS trap use (default 300, 0 = off)
       --aws-regions <list>   comma-separated regions (default: every enabled region)
                          Forwards to HONEYTOKEN_SLACK_WEBHOOK / HONEYTOKEN_DISCORD_WEBHOOK if set
+  watch                  Search CloudTrail for AWS trap use without running a server
+      --once                 one pass, then exit (cron, GitHub Actions); exit 1 if a lookup failed
+      --watchlist <file>     traps to watch (env HONEYTOKEN_WATCHLIST), instead of the registry
+      --aws-poll, --aws-regions, --cooldown   as for serve
+  watchlist              Print the AWS traps to watch, without secret keys (for CI secrets)
+  iam-policy issuer|watcher   Print the IAM policy for issuing traps or for watching CloudTrail
+  workflow               Print a GitHub Actions workflow that runs \`watch --once\` on a schedule
   mcp                    Run the MCP server on stdio (for Claude Code, Cursor, ...)
   install-skill          Copy the agent skill to ~/.claude/skills/honeytoken-planting
       --dir <path>           skills directory to install into instead
@@ -71,6 +85,8 @@ const { values: opt, positionals } = parseArgs({
     'max-age': { type: 'string' },
     'aws-poll': { type: 'string' },
     'aws-regions': { type: 'string' },
+    once: { type: 'boolean' },
+    watchlist: { type: 'string' },
     version: { type: 'boolean', short: 'v' },
     dir: { type: 'string' },
     help: { type: 'boolean', short: 'h' },
@@ -222,11 +238,66 @@ async function main(): Promise<void> {
 
     case 'install-skill': {
       // Home directory by default: a skill committed into the target repo would announce the traps.
-      const dest = path.resolve(opt.dir ?? path.join(os.homedir(), '.claude', 'skills'), 'honeytoken-planting');
-      const source = fileURLToPath(new URL('../skills/honeytoken-planting/SKILL.md', import.meta.url));
-      fs.mkdirSync(dest, { recursive: true });
-      fs.copyFileSync(source, path.join(dest, 'SKILL.md'));
-      console.log(`installed ${path.join(dest, 'SKILL.md')}`);
+      console.log(`installed ${installSkill(opt.dir)}`);
+      return;
+    }
+
+    case 'init': {
+      const steps = await init({
+        cliPath: fileURLToPath(import.meta.url),
+        baseUrl: opt['base-url'] ?? process.env.HONEYTOKEN_BASE_URL,
+        skillsDir: opt.dir,
+        dryRun: opt['dry-run'],
+      });
+      const mark = { done: '✓', already: '✓', skipped: '–', failed: '✗', info: '·' } as const;
+      for (const s of steps) console.log(`${mark[s.status]} ${s.step.padEnd(7)} ${s.detail.replace(/\n/g, '\n          ')}`);
+      if (steps.some((s) => s.status === 'failed')) process.exitCode = 1;
+      return;
+    }
+
+    case 'watch': {
+      const source = opt.watchlist ? fs.readFileSync(opt.watchlist, 'utf8') : process.env.HONEYTOKEN_WATCHLIST;
+      const traps = (): WatchedAwsTrap[] => (source ? parseWatchlist(source) : watchlistFromRegistry(service.home));
+      const regions = opt['aws-regions']?.split(',').map((r) => r.trim()).filter(Boolean);
+      const cooldown = toInt(opt.cooldown, 'cooldown');
+      const dispatch = createDispatcher({
+        notifiers: notifiersFromEnv(),
+        log: (alert) => appendAlert(service.home, alert),
+        cooldownMs: cooldown === undefined ? undefined : cooldown * 1000,
+      });
+      const aws = awsCli();
+      if (opt.once) {
+        const watched = traps();
+        const result = await pollOnce({ home: service.home, aws, traps: watched, regions });
+        // In order, so the cooldown sees the hits the way they happened; then send the summaries
+        // now, because this process will not be around when the window closes.
+        for (const alert of result.alerts) await dispatch(alert);
+        await dispatch.flush();
+        for (const error of result.errors) console.error(`[honeytoken] CloudTrail: ${error}`);
+        console.error(`watched ${watched.length} AWS trap(s)${result.regions ? ` in ${result.regions.length} region(s)` : ''}: ${result.alerts.length} new alert(s)`);
+        if (result.errors.length) process.exitCode = 1;
+        return;
+      }
+      const interval = (toInt(opt['aws-poll'], 'aws-poll') ?? 300) * 1000;
+      watchLoop({ home: service.home, aws, intervalMs: interval, regions, traps, onAlert: (a) => void dispatch(a), keepAlive: true });
+      console.error(`watching AWS traps in CloudTrail every ${interval / 1000}s (Ctrl-C to stop); webhook traps need \`serve\``);
+      return;
+    }
+
+    case 'watchlist': {
+      console.log(JSON.stringify(watchlistFromRegistry(service.home), null, 2));
+      return;
+    }
+
+    case 'iam-policy': {
+      const [kind] = args;
+      if (kind !== 'issuer' && kind !== 'watcher') throw new Error('usage: honeytoken iam-policy issuer|watcher');
+      console.log(JSON.stringify(iamPolicy(kind), null, 2));
+      return;
+    }
+
+    case 'workflow': {
+      process.stdout.write(workflowTemplate());
       return;
     }
 

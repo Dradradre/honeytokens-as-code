@@ -1,7 +1,7 @@
 {
   "name": "honeytoken-mcp",
-  "version": "0.4.0",
-  "description": "Plant context-aware honeytokens in your repo through your coding agent, and get alerted when they are used.",
+  "version": "0.5.0",
+  "description": "Your coding agent plants honeytokens in your repos: real, powerless AWS keys and internal-looking webhook traps, tracked, checked and rotated. Not a canary that watches your agent.",
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -34,7 +34,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "dev": "node src/cli.ts",
     "test": "node --test \"test/*.test.ts\"",
-    "prepare": "tsc"
+    "prepare": "tsc",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^26.6.7",

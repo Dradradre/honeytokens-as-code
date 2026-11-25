@@ -1,9 +1,10 @@
 import http from 'node:http';
-import { awsCli, listRegions, pollCloudTrail, type AwsRunner, type CloudTrailCursor } from './aws.ts';
+import { awsCli, type AwsRunner } from './aws.ts';
 import { handle, resolveClientIp } from './core/handle.ts';
 import type { Alert, AwsTrap, Trap } from './core/types.ts';
 import { createDispatcher, notifiersFromEnv } from './notify/index.ts';
-import { appendAlert, readRegistry, readState, writeState } from './store.ts';
+import { appendAlert, readRegistry } from './store.ts';
+import { watchLoop, type WatchedAwsTrap } from './watch.ts';
 
 export interface ServeOptions {
   home: string;
@@ -57,7 +58,14 @@ export function serve(opts: ServeOptions): Promise<http.Server> {
     void Promise.resolve(onAlert(alert)).catch((err) => console.error('[honeytoken] alert failed:', err));
   const awsPollMs = opts.awsPollMs ?? 5 * 60_000;
   if (awsPollMs > 0) {
-    const stop = watchCloudTrail({ home: opts.home, aws: opts.aws ?? awsCli(), intervalMs: awsPollMs, regions: opts.awsRegions, onAlert: deliver });
+    const stop = watchLoop({
+      home: opts.home,
+      aws: opts.aws ?? awsCli(),
+      intervalMs: awsPollMs,
+      regions: opts.awsRegions,
+      traps: () => loadTraps(opts.home).filter((t): t is AwsTrap => t.kind === 'aws') as WatchedAwsTrap[],
+      onAlert: deliver,
+    });
     server.on('close', stop);
   }
 
@@ -65,53 +73,6 @@ export function serve(opts: ServeOptions): Promise<http.Server> {
     server.once('error', reject);
     server.listen(opts.port ?? 8787, opts.host ?? '127.0.0.1', () => resolve(server));
   });
-}
-
-const CURSOR_FILE = 'cloudtrail.json';
-
-/**
- * Poll CloudTrail event history for every AWS trap, active or retired. Only runs the AWS CLI
- * when the registry actually holds AWS traps, so webhook-only users never need it.
- */
-function watchCloudTrail(o: {
-  home: string;
-  aws: AwsRunner;
-  intervalMs: number;
-  regions?: string[];
-  onAlert: (alert: Alert) => void;
-}): () => void {
-  let regions = o.regions;
-  let timer: NodeJS.Timeout | undefined;
-  let stopped = false;
-
-  const tick = async () => {
-    try {
-      const traps = loadTraps(o.home).filter((t): t is AwsTrap => t.kind === 'aws');
-      if (traps.length > 0) {
-        if (!regions) {
-          regions = await listRegions(o.aws).catch((err: Error) => {
-            console.error(`[honeytoken] cannot list AWS regions (${err.message}); searching us-east-1 only for now`);
-            return undefined;
-          });
-        }
-        const earliest = traps.map((t) => t.createdAt).sort()[0]!;
-        const cursor = readState<CloudTrailCursor>(o.home, CURSOR_FILE, { since: earliest, seen: {} });
-        const result = await pollCloudTrail(o.aws, regions ?? ['us-east-1'], traps, cursor);
-        writeState(o.home, CURSOR_FILE, result.cursor);
-        for (const alert of result.alerts) o.onAlert(alert);
-        for (const error of result.errors) console.error(`[honeytoken] CloudTrail lookup failed in ${error}`);
-      }
-    } catch (err) {
-      console.error('[honeytoken] CloudTrail poll failed:', err);
-    }
-    if (!stopped) timer = setTimeout(tick, o.intervalMs).unref();
-  };
-
-  timer = setTimeout(tick, 0).unref();
-  return () => {
-    stopped = true;
-    clearTimeout(timer);
-  };
 }
 
 function loadTraps(home: string): Trap[] {

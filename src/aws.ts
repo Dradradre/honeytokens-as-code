@@ -10,6 +10,9 @@ import type { Alert, AwsTrap } from './core/types.ts';
  * already has, so their profiles and SSO work as is and we add no SDK dependency.
  */
 
+/** What watching an AWS trap needs: everything but the secret key. Safe to hand to CI. */
+export type WatchedAwsTrap = Omit<AwsTrap, 'secretAccessKey'>;
+
 /** Run one AWS CLI command; resolves to its parsed JSON output, or {} when it prints nothing. */
 export type AwsRunner = (args: string[]) => Promise<any>;
 
@@ -169,7 +172,7 @@ export interface PollResult {
 export async function pollCloudTrail(
   aws: AwsRunner,
   regions: string[],
-  traps: AwsTrap[],
+  traps: WatchedAwsTrap[],
   cursor: CloudTrailCursor,
   now = Date.now(),
 ): Promise<PollResult> {
@@ -227,7 +230,7 @@ export function eventTimeMs(value: unknown): number {
   return typeof value === 'string' ? Date.parse(value) : Number.NaN;
 }
 
-function cloudTrailAlert(trap: AwsTrap, event: any, region: string): Alert {
+function cloudTrailAlert(trap: WatchedAwsTrap, event: any, region: string): Alert {
   let detail: any = {};
   try {
     detail = JSON.parse(event.CloudTrailEvent ?? '{}');

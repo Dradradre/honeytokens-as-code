@@ -29,9 +29,11 @@ src/
   notify/          one file per channel + index.ts (dispatcher, cooldown, notifiersFromEnv)
   store.ts         ~/.honeytoken: registry.json (locked, atomic), alerts.jsonl, cloudtrail.json
   aws.ts           AWS through the user's `aws` CLI: issue, rotate, delete, status, CloudTrail polling
+  watch.ts         CloudTrail watching without a server: watchlists (no secrets), pollOnce, watchLoop
   service.ts       createService(): issue / issueAws / register / list / check / rotate / clean / alerts.
                    Every rule lives here.
-  server.ts        node:http adapter around core/handle, plus the CloudTrail watcher
+  setup.ts         init (skill + MCP registration + AWS check), IAM policies, GitHub Actions template
+  server.ts        node:http adapter around core/handle, plus the CloudTrail watch loop
   mcp.ts, cli.ts   thin shells over the service
 skills/honeytoken-planting/SKILL.md   agent playbook shipped with the package
 test/              node:test suites, one per layer, plus helpers.ts (sandbox repo + home)
@@ -96,8 +98,10 @@ Run `npm run typecheck && npm test` before calling a change done.
 8. **Tokens are not echoed** by `list` or `list_traps`.
 9. **Trap values live on a single line.** `clean` deletes whole lines that contain a trap id or token.
 10. **Registry writes hold the lock.** Go through `updateRegistry`; never write `registry.json` directly.
-11. **Alert volume is bounded.** Per trap and address one alert per cooldown, per trap at most `maxPerTrap` per
-    window, a capped address map, and an alert log that rotates at `MAX_ALERT_LOG_BYTES`.
+11. **Alert volume is bounded, and nothing is dropped silently.** Per trap and address one alert per cooldown,
+    per trap at most `maxPerTrap` per window, a capped address map, an alert log that rotates at
+    `MAX_ALERT_LOG_BYTES`. Held-back hits go out as one summary when the window closes; one-shot runs call
+    `dispatch.flush()` before exiting.
 12. **Client addresses come from the socket** unless the operator names a header with `--trust-proxy`.
     `X-Forwarded-For` is read from the right: the hop our proxy appended, not what the client wrote.
 13. **No fake provider keys.** `generateWebhookTrap` refuses `PROVIDER_PREFIXES` unless the operator passes
@@ -107,6 +111,10 @@ Run `npm run typecheck && npm test` before calling a change done.
 15. **AWS stays untouched without AWS traps.** The CloudTrail watcher only runs the CLI when the registry
     holds an AWS trap. Retired AWS keys stay alive (they are still bait); only never-planted ones are deleted,
     and an IAM user is deleted only when no other trap uses it.
+16. **Watchlists never carry secret keys.** `watchlistFromRegistry` and `parseWatchlist` both drop
+    `secretAccessKey`; a watchlist goes into CI secrets, the registry never does.
+17. **`init` writes nothing into a repo.** It installs the skill under the home directory and registers the MCP
+    server at Claude Code's user scope. Tests drive it through an injected `CommandRunner`, never the real CLIs.
 
 ## Tests
 

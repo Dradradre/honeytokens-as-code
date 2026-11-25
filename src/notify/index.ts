@@ -23,25 +23,61 @@ export interface DispatchOptions {
   /** Most alerts one trap may send per cooldown window, whatever the addresses. Default 5. */
   maxPerTrap?: number;
   now?: () => number;
+  /** How a summary is scheduled for the end of a window. Default: an unref'd setTimeout. */
+  schedule?: (run: () => void, delayMs: number) => void;
 }
+
+/** Send an alert through the limits below; `flush` sends any pending summaries right away. */
+export type Dispatcher = ((alert: Alert) => Promise<void>) & { flush(): Promise<void> };
 
 /** Addresses remembered for the cooldown. Past this, the oldest are forgotten; the per-trap cap still holds. */
 const MAX_TRACKED_ADDRESSES = 10_000;
 
+interface TrapWindow {
+  windowStart: number;
+  sent: number;
+  suppressed: number;
+  /** The latest hit held back, sent as the summary when the window closes. */
+  pending?: Alert;
+  summaryScheduled: boolean;
+}
+
 /**
  * Fan an alert out to every notifier, with two limits so nobody can flood your channels:
  * one alert per trap and address per cooldown, and at most `maxPerTrap` per trap per window
- * (an intruder rotating through IPv6 addresses hits the second). The next alert that does go
- * out says how many hits on that trap were held back.
+ * (an intruder rotating through IPv6 addresses hits the second).
+ *
+ * Held-back hits are never dropped silently: when the window closes, one summary goes out,
+ * showing the latest held-back hit and how many there were. Without it, an intruder's second
+ * and third attempts (often the interesting ones) would only surface if they came back later.
  */
-export function createDispatcher(opts: DispatchOptions): (alert: Alert) => Promise<void> {
+export function createDispatcher(opts: DispatchOptions): Dispatcher {
   const cooldown = opts.cooldownMs ?? 10 * 60_000;
   const maxPerTrap = opts.maxPerTrap ?? 5;
   const now = opts.now ?? Date.now;
+  const schedule = opts.schedule ?? ((run, delayMs) => void setTimeout(run, delayMs).unref());
   const lastByAddress = new Map<string, number>();
-  const byTrap = new Map<string, { windowStart: number; sent: number; suppressed: number }>();
+  const byTrap = new Map<string, TrapWindow>();
 
-  return async (alert) => {
+  const send = async (alert: Alert) => {
+    const results = await Promise.allSettled(opts.notifiers.map((notify) => notify(alert)));
+    for (const r of results) {
+      if (r.status === 'rejected') console.error(`[honeytoken] notifier failed: ${r.reason}`);
+    }
+  };
+
+  const sendSummary = async (trapKey: string) => {
+    const trap = byTrap.get(trapKey);
+    if (!trap) return;
+    trap.summaryScheduled = false;
+    if (!trap.suppressed || !trap.pending) return;
+    const summary = { ...trap.pending, suppressed: trap.suppressed };
+    trap.suppressed = 0;
+    trap.pending = undefined;
+    await send(summary);
+  };
+
+  const dispatch = async (alert: Alert) => {
     opts.log?.(alert);
     const t = now();
 
@@ -51,12 +87,17 @@ export function createDispatcher(opts: DispatchOptions): (alert: Alert) => Promi
 
     let trap = byTrap.get(trapKey);
     if (!trap || t - trap.windowStart >= cooldown) {
-      trap = { windowStart: t, sent: 0, suppressed: trap?.suppressed ?? 0 };
+      trap = { windowStart: t, sent: 0, suppressed: trap?.suppressed ?? 0, pending: trap?.pending, summaryScheduled: trap?.summaryScheduled ?? false };
       byTrap.set(trapKey, trap);
     }
     const lastSent = lastByAddress.get(addressKey);
     if ((lastSent !== undefined && t - lastSent < cooldown) || trap.sent >= maxPerTrap) {
       trap.suppressed++;
+      trap.pending = alert;
+      if (!trap.summaryScheduled) {
+        trap.summaryScheduled = true;
+        schedule(() => void sendSummary(trapKey), Math.max(0, trap.windowStart + cooldown - t));
+      }
       return;
     }
 
@@ -70,9 +111,13 @@ export function createDispatcher(opts: DispatchOptions): (alert: Alert) => Promi
 
     const out = trap.suppressed ? { ...alert, suppressed: trap.suppressed } : alert;
     trap.suppressed = 0;
-    const results = await Promise.allSettled(opts.notifiers.map((notify) => notify(out)));
-    for (const r of results) {
-      if (r.status === 'rejected') console.error(`[honeytoken] notifier failed: ${r.reason}`);
-    }
+    trap.pending = undefined;
+    await send(out);
   };
+
+  return Object.assign(dispatch, {
+    flush: async () => {
+      await Promise.all([...byTrap.keys()].map(sendSummary));
+    },
+  });
 }

@@ -14,7 +14,9 @@
 [![LLM API calls](https://img.shields.io/badge/LLM%20API%20calls-0-FF4D4F?style=flat-square)](#the-brain-and-the-hands)
 [![Status](https://img.shields.io/badge/status-MVP-7D8590?style=flat-square)](#roadmap)
 
-<h3>Tell your coding agent <code>plant honeytokens in this repo</code>.<br>A minute later, your repo is booby-trapped in its own accent.</h3>
+<h3>Your coding agent plants the canaries.<br>Not another canary that watches your agent.</h3>
+
+<p>Say <code>plant honeytokens in this repo</code>. A minute later, real powerless AWS keys and internal-looking<br>webhook traps sit where an intruder would look, written in your repo's own accent, tracked and checked.</p>
 
 [How it works](#the-brain-and-the-hands) · [Two kinds of trap](#two-kinds-of-trap) · [Quickstart](#quickstart) · [Anatomy of an alert](#anatomy-of-an-alert) · [Paranoid by default](#paranoid-by-default) · [Reference](#reference)
 
@@ -32,7 +34,12 @@ Repos leak. A contractor's laptop gets popped, a CI token gets scraped, a privat
 minutes. The first thing anyone does with a stolen repo is grep it for secrets and try them.
 
 Honeytokens turn that grep against them: credentials that do nothing except tell you, loudly, that someone is
-using them. The idea is old. The problem has always been the planting:
+using them. The idea is old. The problem has always been the planting.
+
+> **Not to be confused with** the many 2026 tools that plant canaries to catch a *misbehaving AI agent*
+> (prompt injection, exfiltration). honeytoken-mcp points the other way: the agent is on your side, and the
+> canaries are for whoever steals your repo, your CI or your laptop.
+
 
 | | Classic canary tokens | honeytoken-mcp |
 |---|---|---|
@@ -113,32 +120,36 @@ idea in 2016), and Thinkst offers URL tokens for everything else.
 ## Quickstart
 
 > [!NOTE]
-> Not on npm yet. Run it from a clone; it builds on `npm install`.
+> Not published to npm yet. Until it is, run from a clone: `npm install && node dist/cli.js init`
+> (or `npm link` once, then `honeytoken init`).
 
-**1. Install**
-
-```bash
-git clone <this-repo-url> honeytoken-mcp && cd honeytoken-mcp
-npm install            # builds dist/
-npm link               # optional: puts `honeytoken` on your PATH
-```
-
-**2. Start the alert server** (in its own terminal)
+**1. Set up** (once per machine)
 
 ```bash
-export HONEYTOKEN_SLACK_WEBHOOK=https://hooks.slack.com/services/…     # optional
-export HONEYTOKEN_DISCORD_WEBHOOK=https://discord.com/api/webhooks/…   # optional
-honeytoken serve       # every repo you plant in; data lives in ~/.honeytoken
+npx honeytoken-mcp init
 ```
 
-**3. Hand your agent the tools and the playbook**
+```text
+✓ skill   ~/.claude/skills/honeytoken-planting/SKILL.md
+✓ mcp     registered with Claude Code (user scope: no file in any repo)
+✓ aws     AWS account 123456789012 reachable. Permissions needed: `honeytoken iam-policy issuer`
+· alerts  HONEYTOKEN_BASE_URL is not set: webhook traps only fire on this machine. AWS traps need no public URL.
+· next    Open your repo in Claude Code and say: plant honeytokens in this repo
+```
+
+`init` installs the agent skill, registers the MCP server with Claude Code at user scope, and checks your AWS
+CLI. `--dry-run` shows what it would do. Without Claude Code it prints the config for other MCP clients.
+
+**2. Watch** (pick one)
 
 ```bash
-honeytoken install-skill          # → ~/.claude/skills/honeytoken-planting/SKILL.md
-
-cd /path/to/target-repo
-claude mcp add honeytoken -e HONEYTOKEN_BASE_URL=http://127.0.0.1:8787 -- honeytoken mcp
+honeytoken watch       # AWS traps only, no server, no open port
+honeytoken serve       # AWS traps + webhook traps (listens on 127.0.0.1:8787)
 ```
+
+Or watch AWS traps from a scheduled GitHub Actions job with nothing running anywhere: see
+[Watch AWS traps without a server](#watch-aws-traps-without-a-server). Slack and Discord forwarding:
+`HONEYTOKEN_SLACK_WEBHOOK`, `HONEYTOKEN_DISCORD_WEBHOOK`.
 
 <details>
 <summary><b>Using AWS traps</b></summary>
@@ -171,13 +182,13 @@ you commit (see [Paranoid by default](#paranoid-by-default)). If the client has 
 
 </details>
 
-**4. Ask**
+**3. Ask**
 
 ```text
 › plant honeytokens in this repo
 ```
 
-**5. Prove it fires**
+**4. Prove it fires**
 
 ```bash
 honeytoken list
@@ -186,12 +197,29 @@ AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… aws sts get-caller-identity   # 
 honeytoken alerts
 ```
 
-**6. Keep them fresh**
+**5. Keep them fresh**
 
 ```bash
 honeytoken check       # still planted? due for rotation? AWS key intact? exits 1 if not (CI-friendly)
 honeytoken rotate <id> # fresh value in the same lines; the old one keeps watching
 ```
+
+<br>
+
+## Watch AWS traps without a server
+
+AWS traps need no listener: their use lands in CloudTrail, and anything that can read CloudTrail can raise the
+alert. A scheduled GitHub Actions job in a **private ops repository** (never a repo that holds decoys) is enough:
+
+1. **Role:** in the canary account, create an IAM role the ops repo can assume through GitHub OIDC, with
+   `honeytoken iam-policy watcher` (only `cloudtrail:LookupEvents` and `ec2:DescribeRegions`).
+2. **Secrets** in the ops repo: `HONEYTOKEN_AWS_ROLE` (the role ARN), `HONEYTOKEN_WATCHLIST` (the output of
+   `honeytoken watchlist`: key ids and where each was planted, no secret keys), and `HONEYTOKEN_SLACK_WEBHOOK`
+   and/or `HONEYTOKEN_DISCORD_WEBHOOK`.
+3. **Workflow:** `honeytoken workflow > .github/workflows/honeytoken-watch.yml`, commit, done. It runs
+   `watch --once` every 10 minutes and keeps its cursor in the Actions cache, so nothing alerts twice.
+
+Re-export the watchlist after you plant, rotate or clean AWS traps.
 
 <br>
 
@@ -239,7 +267,7 @@ Extra lines appear when they matter:
 |---|---|
 | `(retired trap)` + `note: this trap was cleaned up, so an old copy of the repo is in use` | The hit came through a trap you removed or rotated: someone is working from history or an old clone |
 | `likely: Slack link preview (link previews fetch URLs on their own)` | The user agent belongs to Slack, Discord, Teams, X, LinkedIn, WhatsApp, GitHub's image proxy or a search crawler |
-| `suppressed: 41 more hits on this trap since the last alert` | Flood control held back repeats: one alert per trap and address per 10 min, and at most 5 per trap per 10 min however many addresses. Every hit is still in `alerts.jsonl` |
+| `suppressed: 41 more hits on this trap since the last alert` | Flood control held back repeats (one alert per trap and address per 10 min, at most 5 per trap per 10 min). When the window closes you get one summary: the latest held-back hit plus the count, so a second and third attempt never go unseen. Every hit is also in `alerts.jsonl` |
 
 **What fires a trap**
 
@@ -266,7 +294,7 @@ A honeytoken tool that gives itself away is worse than none. These are enforced 
 | 🧭 **The agent can't pick the alert host** | The base URL comes only from `HONEYTOKEN_BASE_URL` or the CLI. A model that invents a convincing domain would build a trap that never fires. |
 | 🔍 **Placements are verified, not trusted** | `register_planted_token` reads the file and finds the lines itself. It refuses unplanted traps, files outside a git repository or inside `.git`, and symlinks that lead out of the repo. `clean` and `rotate` check the real path again before they write. |
 | 🪦 **Cleaning retires, it doesn't forget** | Removed and rotated traps keep alerting, AWS keys included. The decoy lives on in git history and every clone made before, and that is exactly the leak you want to hear about. |
-| 🌊 **Floods stay small** | One alert per trap and address per cooldown, at most 5 per trap however many addresses an intruder rotates through, and an alert log that rotates at 10 MB. |
+| 🌊 **Floods stay small, nothing goes missing** | One alert per trap and address per cooldown, at most 5 per trap however many addresses an intruder rotates through, a summary of everything held back when the window closes, and an alert log that rotates at 10 MB. |
 | 🧨 **Request data is treated as hostile** | Attacker-supplied fields are clipped and kept inside code spans; Slack text is escaped and Discord mentions are disabled, so nobody gets `@everyone`'d through your alert. |
 | 💉 **Alerts can't steer your agent** | `list_alerts` hands the agent attacker-written fields labelled as untrusted data, and the skill forbids acting on them. A user agent saying "ignore previous instructions" stays a string. |
 | 🥱 **The server is boring on purpose** | Hits get `401 {"error":"unauthorized"}` like any API rejecting a key. No banner, no version, no health endpoint. |
@@ -285,8 +313,10 @@ src/
   notify/      one file per channel: (alert) => Promise<void>
   store.ts     ~/.honeytoken: registry.json (locked, atomic), alerts.jsonl, cloudtrail.json
   aws.ts       AWS through your `aws` CLI: issue, rotate, delete, status, CloudTrail polling
+  watch.ts     CloudTrail watching without a server: watchlists, one-shot polls, the poll loop
   service.ts   issue · issueAws · register · list · check · rotate · clean · alerts (every rule lives here)
-  server.ts    node:http → core.handle(), plus the CloudTrail watcher
+  setup.ts     init, IAM policies, the GitHub Actions workflow
+  server.ts    node:http → core.handle(), plus the CloudTrail watch loop
   mcp.ts       thin shell over the service
   cli.ts       thin shell over the service
 ```
@@ -340,6 +370,7 @@ export default {
 <br>
 
 ```text
+honeytoken init              [--dry-run] [--base-url]       skill + MCP registration + AWS check
 honeytoken create [webhook]  [--label] [--path-prefix] [--token-prefix] [--token-length] [--charset alnum|hex]
                              [--base-url] [--allow-provider-prefix]
 honeytoken create aws        --user-name <name> [--label]
@@ -351,6 +382,10 @@ honeytoken clean <id...> | --all  [--dry-run]
 honeytoken alerts            [--limit 20] [--json]
 honeytoken serve             [--host 127.0.0.1] [--port 8787] [--cooldown 600] [--trust-proxy <header>]
                              [--aws-poll 300] [--aws-regions us-east-1,ap-northeast-2]
+honeytoken watch             [--once] [--watchlist file] [--aws-poll 300] [--aws-regions …]
+honeytoken watchlist                                        AWS traps to watch, no secret keys
+honeytoken iam-policy        issuer|watcher
+honeytoken workflow                                         GitHub Actions job for `watch --once`
 honeytoken mcp
 honeytoken install-skill     [--dir ~/.claude/skills]
 honeytoken --version
@@ -369,6 +404,7 @@ global: --home <path>        (env HONEYTOKEN_HOME, default ~/.honeytoken)
 |---|---|---|
 | `HONEYTOKEN_BASE_URL` | `create`, `mcp` | Public URL of your alert server (webhook traps). Default `http://127.0.0.1:8787` |
 | `HONEYTOKEN_HOME` | all | Data directory: `registry.json`, `alerts.jsonl`, `cloudtrail.json`. Default `~/.honeytoken` |
+| `HONEYTOKEN_WATCHLIST` | `watch` | Watchlist JSON to use instead of the registry (CI) |
 | `HONEYTOKEN_SLACK_WEBHOOK` | `serve` | Slack incoming webhook URL |
 | `HONEYTOKEN_DISCORD_WEBHOOK` | `serve` | Discord webhook URL |
 | `AWS_PROFILE`, … | AWS traps | Read by the `aws` CLI as usual |
@@ -467,6 +503,7 @@ new one starts.
 - [x] Alert cooldown, link-preview bot hints, alert log
 - [x] Retired traps that keep watching; one registry for every repo
 - [x] `check` for lost or stale traps, `rotate` in place
+- [x] One-command `init`; AWS watching without a server (`watch`, GitHub Actions)
 - [ ] Push instead of poll for AWS (EventBridge → alert server)
 - [ ] GCP and Azure credential canaries
 - [ ] Cloudflare Worker adapter (`core` already runs there)

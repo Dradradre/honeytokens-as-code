@@ -14,7 +14,9 @@
 [![LLM API calls](https://img.shields.io/badge/LLM%20API%20%ED%98%B8%EC%B6%9C-0%ED%9A%8C-FF4D4F?style=flat-square)](#두뇌와-손발)
 [![Status](https://img.shields.io/badge/status-MVP-7D8590?style=flat-square)](#로드맵)
 
-<h3>코딩 에이전트에게 <code>이 레포에 허니토큰 심어줘</code> 한마디.<br>1분 뒤, 레포 말투 그대로 지뢰가 깔립니다.</h3>
+<h3>코딩 에이전트가 심는 카나리.<br>에이전트를 감시하는 또 하나의 카나리가 아닙니다.</h3>
+
+<p><code>이 레포에 허니토큰 심어줘</code> 한마디면, 1분 뒤 권한 없는 진짜 AWS 키와 사내 서비스처럼 생긴 웹훅 트랩이<br>침입자가 들여다볼 자리에 레포 말투 그대로 깔리고, 기록되고, 점검됩니다.</p>
 
 [동작 원리](#두뇌와-손발) · [트랩 두 종류](#트랩-두-종류) · [빠른 시작](#빠른-시작) · [경보 해부](#경보-해부) · [기본값은 편집증](#기본값은-편집증) · [레퍼런스](#레퍼런스)
 
@@ -33,6 +35,10 @@
 
 허니토큰은 그 grep을 역이용합니다. 아무 일도 못 하는 자격 증명인데, 누가 쓰는 순간 크게 울립니다.
 아이디어 자체는 오래됐습니다. 늘 걸렸던 건 심는 일이었습니다.
+
+> **헷갈리지 마세요.** 2026년에 쏟아진 도구들 상당수는 *말 안 듣는 AI 에이전트*(프롬프트 인젝션, 유출)를 잡으려고 카나리를 심습니다.
+> honeytoken-mcp는 반대 방향입니다. 에이전트는 내 편이고, 카나리는 내 레포나 CI, 노트북을 훔친 사람을 위한 것입니다.
+
 
 | | 기존 카나리 토큰 | honeytoken-mcp |
 |---|---|---|
@@ -110,32 +116,36 @@ CloudTrail로 사용을 감지합니다(권한 없는 IAM 사용자라는 발상
 ## 빠른 시작
 
 > [!NOTE]
-> 아직 npm에 올리지 않았습니다. 클론해서 쓰면 `npm install` 때 빌드까지 됩니다.
+> 아직 npm에 올리지 않았습니다. 그때까지는 클론해서 `npm install && node dist/cli.js init`으로 쓰세요
+> (또는 `npm link` 한 번 뒤 `honeytoken init`).
 
-**1. 설치**
-
-```bash
-git clone <this-repo-url> honeytoken-mcp && cd honeytoken-mcp
-npm install            # dist/ 빌드
-npm link               # 선택: PATH에 `honeytoken` 등록
-```
-
-**2. 경보 서버 실행** (별도 터미널)
+**1. 설정** (기기당 한 번)
 
 ```bash
-export HONEYTOKEN_SLACK_WEBHOOK=https://hooks.slack.com/services/…     # 선택
-export HONEYTOKEN_DISCORD_WEBHOOK=https://discord.com/api/webhooks/…   # 선택
-honeytoken serve       # 미끼를 심은 모든 레포를 감시. 데이터는 ~/.honeytoken에
+npx honeytoken-mcp init
 ```
 
-**3. 에이전트에게 툴과 플레이북 쥐여 주기**
+```text
+✓ skill   ~/.claude/skills/honeytoken-planting/SKILL.md
+✓ mcp     registered with Claude Code (user scope: no file in any repo)
+✓ aws     AWS account 123456789012 reachable. Permissions needed: `honeytoken iam-policy issuer`
+· alerts  HONEYTOKEN_BASE_URL is not set: webhook traps only fire on this machine. AWS traps need no public URL.
+· next    Open your repo in Claude Code and say: plant honeytokens in this repo
+```
+
+`init`은 에이전트 스킬을 설치하고, MCP 서버를 Claude Code에 사용자 단위로 등록하고, AWS CLI를 확인합니다.
+`--dry-run`으로 미리 볼 수 있고, Claude Code가 없으면 다른 MCP 클라이언트용 설정을 출력합니다.
+
+**2. 감시** (하나 고르기)
 
 ```bash
-honeytoken install-skill          # → ~/.claude/skills/honeytoken-planting/SKILL.md
-
-cd /path/to/target-repo
-claude mcp add honeytoken -e HONEYTOKEN_BASE_URL=http://127.0.0.1:8787 -- honeytoken mcp
+honeytoken watch       # AWS 트랩만. 서버도, 열린 포트도 없음
+honeytoken serve       # AWS 트랩 + 웹훅 트랩 (127.0.0.1:8787에서 대기)
 ```
+
+아무것도 띄우지 않고 GitHub Actions 예약 실행으로 AWS 트랩을 감시할 수도 있습니다.
+[서버 없이 AWS 트랩 감시하기](#서버-없이-aws-트랩-감시하기)를 보세요. Slack·Discord 전달은
+`HONEYTOKEN_SLACK_WEBHOOK`, `HONEYTOKEN_DISCORD_WEBHOOK`입니다.
 
 <details>
 <summary><b>AWS 트랩 쓰기</b></summary>
@@ -165,13 +175,13 @@ stdio 서버로 `honeytoken mcp`(또는 `node /abs/path/dist/cli.js mcp`)를 등
 
 </details>
 
-**4. 요청**
+**3. 요청**
 
 ```text
 › 이 레포에 허니토큰 심어줘
 ```
 
-**5. 울리는지 확인**
+**4. 울리는지 확인**
 
 ```bash
 honeytoken list
@@ -180,12 +190,28 @@ AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… aws sts get-caller-identity   # 
 honeytoken alerts
 ```
 
-**6. 신선하게 유지**
+**5. 신선하게 유지**
 
 ```bash
 honeytoken check       # 아직 심겨 있나? 교체할 때인가? AWS 키는 멀쩡한가? 아니면 exit 1 (CI에 붙이기 좋음)
 honeytoken rotate <id> # 같은 줄에 새 값. 예전 값은 계속 감시
 ```
+
+<br>
+
+## 서버 없이 AWS 트랩 감시하기
+
+AWS 트랩은 대기하는 서버가 필요 없습니다. 사용 기록이 CloudTrail에 남으니, CloudTrail을 읽을 수 있는 무엇이든 경보를 울릴 수 있습니다.
+**비공개 운영용 레포**(미끼를 심은 레포는 절대 아님)의 GitHub Actions 예약 실행이면 충분합니다.
+
+1. **역할:** 카나리 계정에 운영 레포가 GitHub OIDC로 맡을 수 있는 IAM 역할을 만들고 `honeytoken iam-policy watcher`를 붙입니다
+   (`cloudtrail:LookupEvents`, `ec2:DescribeRegions`뿐).
+2. **시크릿**(운영 레포): `HONEYTOKEN_AWS_ROLE`(역할 ARN), `HONEYTOKEN_WATCHLIST`(`honeytoken watchlist` 출력. 키 ID와 심은 위치만 있고 비밀 키는 없음),
+   `HONEYTOKEN_SLACK_WEBHOOK` 또는 `HONEYTOKEN_DISCORD_WEBHOOK`.
+3. **워크플로:** `honeytoken workflow > .github/workflows/honeytoken-watch.yml` 후 커밋하면 끝. 10분마다 `watch --once`를 돌리고
+   커서를 Actions 캐시에 보관해서 같은 경보가 두 번 오지 않습니다.
+
+AWS 트랩을 심거나, 교체하거나, 정리한 뒤에는 감시 목록을 다시 내보내세요.
 
 <br>
 
@@ -231,7 +257,7 @@ at: 2026-12-14T03:12:09.114Z
 |---|---|
 | `(retired trap)` + `note: this trap was cleaned up, so an old copy of the repo is in use` | 이미 제거했거나 교체한 트랩이 울렸을 때. 누군가 히스토리나 예전 클론을 쓰고 있다는 뜻 |
 | `likely: Slack link preview (link previews fetch URLs on their own)` | UA가 Slack, Discord, Teams, X, LinkedIn, WhatsApp, GitHub 이미지 프록시, 검색 크롤러일 때 |
-| `suppressed: 41 more hits on this trap since the last alert` | 폭주 제어가 반복 알림을 묶었을 때. 트랩·주소별 10분에 한 번, 주소가 몇 개든 트랩당 10분에 최대 5번. 전부 `alerts.jsonl`에는 남음 |
+| `suppressed: 41 more hits on this trap since the last alert` | 폭주 제어가 반복 알림을 묶었을 때(트랩·주소별 10분에 한 번, 트랩당 10분에 최대 5번). 창이 닫히면 묶였던 것 중 가장 최근 신호와 개수를 요약 경보 하나로 보내서, 두 번째·세 번째 시도가 묻히지 않습니다. 모든 신호는 `alerts.jsonl`에도 남음 |
 
 **무엇이 트랩을 건드리나**
 
@@ -257,7 +283,7 @@ at: 2026-12-14T03:12:09.114Z
 | 🧭 **경보 호스트는 에이전트가 못 고름** | base URL은 `HONEYTOKEN_BASE_URL`이나 CLI에서만 옵니다. 모델이 그럴듯한 도메인을 지어내면 영영 울리지 않는 트랩이 됩니다. |
 | 🔍 **위치는 믿지 않고 검증** | `register_planted_token`은 파일을 직접 읽어 줄을 찾습니다. 아직 안 심은 트랩, git 레포 밖이나 `.git` 안의 파일, 레포 밖으로 이어지는 심볼릭 링크는 거부합니다. `clean`과 `rotate`는 쓰기 직전에 실제 경로를 한 번 더 확인합니다. |
 | 🪦 **지워도 잊지 않음** | 제거하거나 교체한 트랩도 계속 울립니다. AWS 키도 마찬가지입니다. git 히스토리와 그 전에 만든 클론에는 미끼가 그대로 남아 있고, 바로 그 유출이 가장 알고 싶은 신호입니다. |
-| 🌊 **폭주해도 작게** | 트랩·주소별 쿨다운에 한 번, 침입자가 주소를 아무리 바꿔도 트랩당 최대 5번. 경보 로그는 10MB에서 교체됩니다. |
+| 🌊 **폭주해도 작게, 빠짐없이** | 트랩·주소별 쿨다운에 한 번, 침입자가 주소를 아무리 바꿔도 트랩당 최대 5번. 창이 닫히면 묶였던 신호를 요약해 보내고, 경보 로그는 10MB에서 교체됩니다. |
 | 🧨 **요청 데이터는 적대적으로 취급** | 공격자가 보낸 필드는 잘라서 코드 스팬 안에 가둡니다. Slack용 텍스트는 이스케이프하고 Discord 멘션은 꺼서, 경보를 통해 `@everyone`이 날아가지 않습니다. |
 | 💉 **경보가 에이전트를 조종하지 못함** | `list_alerts`는 공격자가 쓴 필드를 "신뢰할 수 없는 데이터"로 표시해서 넘기고, 스킬은 그 내용대로 행동하는 걸 금지합니다. "ignore previous instructions"라고 적힌 UA는 그냥 문자열입니다. |
 | 🥱 **서버는 일부러 따분하게** | 트랩에 걸린 요청은 평범한 API처럼 `401 {"error":"unauthorized"}`를 받습니다. 배너, 버전, 헬스 체크 엔드포인트 없음. |
@@ -276,8 +302,10 @@ src/
   notify/      채널마다 파일 하나: (alert) => Promise<void>
   store.ts     ~/.honeytoken: registry.json (잠금, 원자적 쓰기), alerts.jsonl, cloudtrail.json
   aws.ts       내 `aws` CLI를 통한 AWS: 발급, 교체, 삭제, 상태, CloudTrail 폴링
+  watch.ts     서버 없는 CloudTrail 감시: 감시 목록, 1회 폴링, 폴링 루프
   service.ts   issue · issueAws · register · list · check · rotate · clean · alerts (모든 규칙은 여기에)
-  server.ts    node:http → core.handle(), 그리고 CloudTrail 감시
+  setup.ts     init, IAM 정책, GitHub Actions 워크플로
+  server.ts    node:http → core.handle(), 그리고 CloudTrail 감시 루프
   mcp.ts       서비스 위의 얇은 껍데기
   cli.ts       서비스 위의 얇은 껍데기
 ```
@@ -331,6 +359,7 @@ export default {
 <br>
 
 ```text
+honeytoken init              [--dry-run] [--base-url]       스킬 + MCP 등록 + AWS 확인
 honeytoken create [webhook]  [--label] [--path-prefix] [--token-prefix] [--token-length] [--charset alnum|hex]
                              [--base-url] [--allow-provider-prefix]
 honeytoken create aws        --user-name <name> [--label]
@@ -342,6 +371,10 @@ honeytoken clean <id...> | --all  [--dry-run]
 honeytoken alerts            [--limit 20] [--json]
 honeytoken serve             [--host 127.0.0.1] [--port 8787] [--cooldown 600] [--trust-proxy <header>]
                              [--aws-poll 300] [--aws-regions us-east-1,ap-northeast-2]
+honeytoken watch             [--once] [--watchlist file] [--aws-poll 300] [--aws-regions …]
+honeytoken watchlist                                        감시할 AWS 트랩, 비밀 키 없음
+honeytoken iam-policy        issuer|watcher
+honeytoken workflow                                         `watch --once`용 GitHub Actions 작업
 honeytoken mcp
 honeytoken install-skill     [--dir ~/.claude/skills]
 honeytoken --version
@@ -360,6 +393,7 @@ global: --home <path>        (env HONEYTOKEN_HOME, default ~/.honeytoken)
 |---|---|---|
 | `HONEYTOKEN_BASE_URL` | `create`, `mcp` | 경보 서버의 공개 URL(웹훅 트랩). 기본 `http://127.0.0.1:8787` |
 | `HONEYTOKEN_HOME` | 전체 | 데이터 디렉터리(`registry.json`, `alerts.jsonl`, `cloudtrail.json`). 기본 `~/.honeytoken` |
+| `HONEYTOKEN_WATCHLIST` | `watch` | 레지스트리 대신 쓸 감시 목록 JSON (CI용) |
 | `HONEYTOKEN_SLACK_WEBHOOK` | `serve` | Slack incoming webhook URL |
 | `HONEYTOKEN_DISCORD_WEBHOOK` | `serve` | Discord webhook URL |
 | `AWS_PROFILE` 등 | AWS 트랩 | 평소처럼 `aws` CLI가 읽음 |
@@ -448,6 +482,7 @@ global: --home <path>        (env HONEYTOKEN_HOME, default ~/.honeytoken)
 - [x] 경보 쿨다운, 링크 미리보기 봇 표시, 경보 로그
 - [x] 은퇴 후에도 감시하는 트랩, 모든 레포를 아우르는 레지스트리 하나
 - [x] 사라졌거나 오래된 트랩을 잡는 `check`, 제자리 `rotate`
+- [x] 명령 하나로 끝나는 `init`, 서버 없는 AWS 감시(`watch`, GitHub Actions)
 - [ ] AWS를 폴링 대신 푸시로 (EventBridge → 경보 서버)
 - [ ] GCP, Azure 자격 증명 카나리
 - [ ] Cloudflare Worker 어댑터 (`core`는 이미 그대로 돌아감)

@@ -68,6 +68,49 @@ test('per-trap cap: an intruder rotating addresses cannot flood the channels', a
   assert.equal(sent.at(-1)?.suppressed, 19_997, 'the next alert reports everything held back');
 });
 
+test('held-back hits come out as one summary when the window closes, not on some later alert', async () => {
+  let clock = 0;
+  const timers: { run: () => void; at: number }[] = [];
+  const sent: Alert[] = [];
+  const dispatch = createDispatcher({
+    notifiers: [async (a) => void sent.push(a)],
+    cooldownMs: 1000,
+    now: () => clock,
+    schedule: (run, delay) => void timers.push({ run, at: clock + delay }),
+  });
+
+  await dispatch(alert({ path: 'sts GetCallerIdentity' }));
+  clock = 100;
+  await dispatch(alert({ path: 's3 ListBuckets -> AccessDenied' }));
+  clock = 200;
+  await dispatch(alert({ path: 'iam CreateUser -> AccessDenied' }));
+  assert.equal(sent.length, 1, 'repeats held back during the window');
+  assert.equal(timers.length, 1, 'one summary scheduled per window');
+  assert.equal(timers[0]?.at, 1000, 'at the end of the window');
+
+  timers[0]!.run();
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual([sent[1]?.path, sent[1]?.suppressed], ['iam CreateUser -> AccessDenied', 2], 'latest held-back hit plus the count');
+
+  clock = 1500;
+  await dispatch(alert({ path: 'later' }));
+  assert.equal(sent[2]?.suppressed, undefined, 'the summary already accounted for them');
+});
+
+test('flush sends pending summaries now (for one-shot runs) and nothing when there are none', async () => {
+  const sent: Alert[] = [];
+  const dispatch = createDispatcher({ notifiers: [async (a) => void sent.push(a)], schedule: () => {} });
+  await dispatch.flush();
+  assert.equal(sent.length, 0);
+  await dispatch(alert());
+  await dispatch(alert({ path: '/second' }));
+  await dispatch(alert({ path: '/third' }));
+  await dispatch.flush();
+  assert.deepEqual(sent.map((a) => [a.path, a.suppressed]), [[alert().path, undefined], ['/third', 2]]);
+  await dispatch.flush();
+  assert.equal(sent.length, 2, 'flush is idempotent');
+});
+
 test('a failing notifier does not stop the others', async () => {
   const sent: string[] = [];
   const dispatch = createDispatcher({
