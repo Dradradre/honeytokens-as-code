@@ -438,8 +438,13 @@ new one starts.
 
 ## Limitations, honestly
 
-- **AWS alerts are minutes late.** CloudTrail delivers events after a delay and the server polls (every 5 min
-  by default). Good enough to catch a leak, not to stop the first call.
+- **AWS alerts are minutes late.** CloudTrail delivers events in about 5 minutes on average and sometimes 15 or
+  more, and the server polls every 5 minutes by default. Each poll re-reads the last 2 hours, so a late event
+  still alerts, just late. Good enough to catch a leak, not to stop the first call.
+- **Data-plane calls are invisible.** CloudTrail event history holds management events only. Reading or writing
+  S3 objects, invoking Lambda functions or touching DynamoDB items with the key is not recorded there (that needs
+  a data-event trail), so an intruder who only makes such calls is not caught. The first thing most people run
+  with a found key, `aws sts get-caller-identity`, is a management event and is caught.
 - **Not every AWS call reaches CloudTrail.** Researchers have used unlogged API calls to probe AWS identities
   quietly, so a careful intruder may be able to test a key without leaving an event. Anything they do with it
   beyond that is caught.

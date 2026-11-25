@@ -151,6 +151,43 @@ test('event time is read in both AWS CLI formats (v1 epoch seconds, v2 ISO), nev
   assert.equal(alerts[0]?.at, happened.toISOString());
 });
 
+test('an event CloudTrail delivers long after the call is still caught by the next poll', async () => {
+  const aws = fakeAws();
+  const { service, write } = sandbox(undefined, aws);
+  const t = await service.issueAws({ userName: 'svc-export' });
+  write('a.env', `K=${t.accessKeyId}\n`);
+  service.register(t.id, 'a.env');
+  const trap = readRegistry(service.home).traps[0] as AwsTrap;
+
+  // The previous poll ended 5 minutes ago and saw nothing. The event happened 45 minutes ago
+  // but only became visible now (AWS: ~5 min on average, 15+ min is not unusual).
+  const now = Date.now();
+  aws.use(t.accessKeyId, { at: new Date(now - 45 * 60_000) });
+  const { alerts } = await pollCloudTrail(aws.run, ['us-east-1'], [trap], { since: new Date(now - 5 * 60_000).toISOString(), seen: {} }, now);
+  assert.equal(alerts.length, 1);
+});
+
+test('error codes are read from responseElements when a service puts them there', async () => {
+  const aws = fakeAws();
+  const { service, write } = sandbox(undefined, aws);
+  const t = await service.issueAws({ userName: 'svc-export' });
+  write('a.env', `K=${t.accessKeyId}\n`);
+  service.register(t.id, 'a.env');
+  const trap = readRegistry(service.home).traps[0] as AwsTrap;
+
+  aws.use(t.accessKeyId, { eventName: 'ConsoleLogin' });
+  const detail = JSON.parse(String(aws.events[0]!.event.CloudTrailEvent));
+  aws.events[0]!.event.CloudTrailEvent = JSON.stringify({ ...detail, responseElements: { ConsoleLogin: 'Failure' }, errorMessage: 'Failed authentication' });
+  aws.use(t.accessKeyId, { eventName: 'Decrypt' });
+  const other = JSON.parse(String(aws.events[1]!.event.CloudTrailEvent));
+  aws.events[1]!.event.CloudTrailEvent = JSON.stringify({ ...other, responseElements: { errorCode: 'AccessDeniedException' } });
+
+  const { alerts } = await pollCloudTrail(aws.run, ['us-east-1'], [trap], { since: new Date(Date.now() - 3_600_000).toISOString(), seen: {} });
+  const paths = alerts.map((a) => a.path).sort();
+  assert.ok(paths.some((p) => p.includes('ConsoleLogin -> Failure')), paths.join(' | '));
+  assert.ok(paths.some((p) => p.includes('Decrypt -> AccessDeniedException')), paths.join(' | '));
+});
+
 test('serve finds AWS trap use in CloudTrail and alerts like any other hit', async () => {
   const aws = fakeAws();
   const { service, home, write } = sandbox(undefined, aws);

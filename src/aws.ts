@@ -140,8 +140,12 @@ export async function listRegions(aws: AwsRunner): Promise<string[]> {
   return regions;
 }
 
-/** CloudTrail can deliver an event minutes after the call, so every poll looks back this far again. */
-export const LOOKBACK_MS = 30 * 60_000;
+/**
+ * Events are indexed by when the call happened, but show up when CloudTrail delivers them:
+ * about 5 minutes on average per AWS, 15+ minutes is not unusual, and AWS only calls 30+ a
+ * delivery problem. Every poll looks back this far again so a late event is never skipped.
+ */
+export const LOOKBACK_MS = 2 * 60 * 60_000;
 const MAX_WINDOW_MS = 90 * 24 * 60 * 60_000; // event history keeps 90 days
 
 export interface CloudTrailCursor {
@@ -202,6 +206,18 @@ export async function pollCloudTrail(
 }
 
 /**
+ * Most services put the error in a top-level errorCode; some put it in responseElements,
+ * either as an errorCode field or as a "Failure" value (ConsoleLogin, for one).
+ */
+function errorOf(detail: any): string | undefined {
+  if (detail.errorCode) return String(detail.errorCode);
+  const response = detail.responseElements;
+  if (!response || typeof response !== 'object') return undefined;
+  if (typeof response.errorCode === 'string') return response.errorCode;
+  return Object.values(response).includes('Failure') ? 'Failure' : undefined;
+}
+
+/**
  * AWS CLI v1 prints timestamps as epoch seconds by default (`1795576025.21`), v2 and
  * `cli_timestamp_format = iso8601` as ISO strings. Accept both; NaN when neither.
  */
@@ -219,7 +235,8 @@ function cloudTrailAlert(trap: AwsTrap, event: any, region: string): Alert {
     // keep the summary fields
   }
   const source = detail.eventSource ?? event.EventSource ?? 'unknown';
-  const outcome = detail.errorCode ? ` -> ${detail.errorCode}` : '';
+  const failure = errorOf(detail);
+  const outcome = failure ? ` -> ${failure}` : '';
   const at = eventTimeMs(event.EventTime ?? detail.eventTime);
   return {
     trapId: trap.id,
