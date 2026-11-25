@@ -1,115 +1,111 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { test } from 'node:test';
-import type { AddressInfo } from 'node:net';
-import { addTrap, cleanTraps, readLock, registerPlacement } from '../src/lock.ts';
-import type { Alert } from '../src/notify.ts';
-import { formatAlert } from '../src/notify.ts';
-import { startServer } from '../src/server.ts';
-import { createTrap } from '../src/trap.ts';
+import { formatAlert, generateTrap, handle, trapsIn, type Alert, type Trap } from '../src/core/index.ts';
 
-function tempRepo(): { root: string; lock: string } {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'honeytoken-'));
-  fs.mkdirSync(path.join(root, '.git', 'info'), { recursive: true });
-  return { root, lock: path.join(root, 'honeytoken.lock') };
+const trap = (over: Partial<Trap> = {}): Trap => ({
+  ...generateTrap({ baseUrl: 'https://hooks.example.com', label: 'billing key' }),
+  placements: [{ repo: '/src/acme-payments', file: 'deploy/legacy/billing.env', line: 7, plantedAt: 'x' }],
+  ...over,
+});
+
+async function hit(traps: Trap[], input: string, init?: RequestInit) {
+  const alerts: Alert[] = [];
+  const res = await handle(new Request(new URL(input, 'https://hooks.example.com'), init), {
+    traps: () => traps,
+    onAlert: (a) => void alerts.push(a),
+    clientIp: '203.0.113.47',
+  });
+  return { status: res.status, body: await res.json(), alerts };
 }
 
-test('createTrap follows the requested style', () => {
-  const trap = createTrap({
+test('core uses Web-standard APIs only, so it runs outside Node', () => {
+  for (const file of fs.readdirSync(new URL('../src/core/', import.meta.url))) {
+    const source = fs.readFileSync(new URL(`../src/core/${file}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /from ['"]node:|require\(|\bBuffer\b|process\./, `src/core/${file}`);
+  }
+});
+
+test('generateTrap follows the requested style and rejects bad input', () => {
+  const t = generateTrap({
     baseUrl: 'https://hooks.example.com/',
     pathPrefix: '/api/v2/billing/callback',
     tokenPrefix: 'sk_live_',
     tokenLength: 24,
     tokenCharset: 'hex',
   });
-  assert.match(trap.id, /^[a-z0-9]{20}$/);
-  assert.equal(trap.url, `https://hooks.example.com/api/v2/billing/callback/${trap.id}`);
-  assert.match(trap.token, /^sk_live_[0-9a-f]{24}$/);
-  assert.throws(() => createTrap({ baseUrl: 'http://x', pathPrefix: '/../etc' }));
-  assert.throws(() => createTrap({ baseUrl: 'http://x', tokenLength: 8 }));
+  assert.match(t.id, /^[a-z0-9]{20}$/);
+  assert.equal(t.url, `https://hooks.example.com/api/v2/billing/callback/${t.id}`);
+  assert.match(t.token, /^sk_live_[0-9a-f]{24}$/);
+  assert.equal(t.status, 'active');
+  assert.throws(() => generateTrap({ baseUrl: 'http://x', pathPrefix: '/../etc' }));
+  assert.throws(() => generateTrap({ baseUrl: 'http://x', tokenLength: 8 }));
+  assert.throws(() => generateTrap({ baseUrl: 'http://x', tokenPrefix: 'a b' }));
 });
 
-test('register finds the lines itself and rejects unplanted or outside files', () => {
-  const { root, lock } = tempRepo();
-  const trap = createTrap({ baseUrl: 'http://127.0.0.1:8787' });
-  addTrap(lock, trap);
+test('random parts use the whole alphabet', () => {
+  const seen = new Set(Array.from({ length: 200 }, () => generateTrap({ baseUrl: 'http://x' }).token).join(''));
+  assert.equal(seen.size, 62);
+});
 
-  fs.writeFileSync(path.join(root, '.env.example'), `DB_HOST=localhost\nBILLING_API_KEY=${trap.token}\n`);
+test('trapsIn reports what gave each trap away', () => {
+  const a = trap();
+  const b = trap();
   assert.deepEqual(
-    registerPlacement(lock, trap.id, '.env.example').map((p) => p.line),
-    [2],
+    trapsIn(`GET /x/${a.id}\nAuthorization: Bearer ${a.token}\n${b.token}`, [a, b]).map((h) => [h.trap.id, h.matched]),
+    [[a.id, ['url', 'token']], [b.id, ['token']]],
   );
-  assert.throws(() => registerPlacement(lock, trap.id, '.env.example', 1), /does not hold/);
-
-  fs.writeFileSync(path.join(root, 'empty.txt'), 'nothing here\n');
-  assert.throws(() => registerPlacement(lock, trap.id, 'empty.txt'), /not found/);
-  assert.throws(() => registerPlacement(lock, trap.id, '../outside.txt'), /outside/);
-
-  assert.equal(fs.readFileSync(path.join(root, '.git', 'info', 'exclude'), 'utf8'), '/honeytoken.lock\n');
+  assert.deepEqual(trapsIn('nothing here', [a, b]), []);
 });
 
-test('clean removes only trap lines and forgets the trap', () => {
-  const { root, lock } = tempRepo();
-  const keep = createTrap({ baseUrl: 'http://127.0.0.1:8787', label: 'keep' });
-  const drop = createTrap({ baseUrl: 'http://127.0.0.1:8787', label: 'drop' });
-  addTrap(lock, keep);
-  addTrap(lock, drop);
+test('handle: trap URL, header, Basic auth, query and body all fire; noise does not', async () => {
+  const t = trap();
+  const basic = btoa(`api:${t.token}`);
 
-  const file = path.join(root, '.env');
-  fs.writeFileSync(file, `A=1\nOLD_WEBHOOK=${drop.url}\nB=2\nOTHER=${keep.token}\n`);
-  registerPlacement(lock, drop.id, '.env');
-  registerPlacement(lock, keep.id, '.env');
+  const noise = await hit([t], '/wp-login.php');
+  assert.deepEqual([noise.status, noise.body, noise.alerts.length], [404, { error: 'not_found' }, 0]);
 
-  const preview = cleanTraps(lock, [drop.id], { dryRun: true });
-  assert.deepEqual(preview[0]?.removed, [{ file: '.env', lines: [2] }]);
-  assert.equal(readLock(lock).traps.length, 2);
+  const viaUrl = await hit([t], new URL(t.url).pathname);
+  assert.deepEqual([viaUrl.status, viaUrl.body, viaUrl.alerts[0]?.matched], [401, { error: 'unauthorized' }, ['url']]);
 
-  cleanTraps(lock, [drop.id]);
-  assert.equal(fs.readFileSync(file, 'utf8'), `A=1\nB=2\nOTHER=${keep.token}\n`);
-  assert.deepEqual(readLock(lock).traps.map((t) => t.label), ['keep']);
-  assert.throws(() => cleanTraps(lock, ['nope']), /no trap/);
-});
-
-test('server alerts on trap url or token and stays quiet otherwise', async () => {
-  const { root, lock } = tempRepo();
-  const trap = createTrap({ baseUrl: 'http://127.0.0.1', label: 'billing key' });
-  addTrap(lock, trap);
-  fs.writeFileSync(path.join(root, '.env'), `BILLING_API_KEY=${trap.token}\n`);
-  registerPlacement(lock, trap.id, '.env');
-
-  const alerts: Alert[] = [];
-  const server = await startServer({ lockPath: lock, port: 0, onAlert: (a) => void alerts.push(a) });
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-
-  try {
-    assert.equal((await fetch(`${base}/random/path`)).status, 404);
-    assert.equal((await fetch(base + new URL(trap.url).pathname)).status, 401);
-    await fetch(`${base}/v1/charges`, { headers: { authorization: `Bearer ${trap.token}` } });
-    const basic = Buffer.from(`api:${trap.token}`).toString('base64');
-    await fetch(`${base}/v1/charges`, { method: 'POST', headers: { authorization: `Basic ${basic}` } });
-    await new Promise((r) => setImmediate(r));
-  } finally {
-    server.close();
+  for (const init of [
+    { headers: { 'x-api-key': t.token } },
+    { headers: { authorization: `Basic ${basic}` } },
+    { method: 'POST', body: JSON.stringify({ api_key: t.token }) },
+  ]) {
+    assert.deepEqual((await hit([t], '/v1/charges', init)).alerts[0]?.matched, ['token']);
   }
-
-  assert.equal(alerts.length, 3);
-  assert.deepEqual(alerts.map((a) => a.matched), [['url'], ['token'], ['token']]);
-  assert.deepEqual(alerts[0]?.plantedIn, ['.env:1']);
+  assert.equal((await hit([t], `/v1/charges?key=${t.token}`)).alerts.length, 1);
 });
 
-test('formatAlert keeps attacker input inside code spans', () => {
+test('handle: alert carries placement, status, bot hint, and clipped request fields', async () => {
+  const t = trap({ status: 'retired' });
+  const { alerts } = await hit([t], `/${t.id}/${'a'.repeat(1000)}`, {
+    headers: { 'user-agent': 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)' },
+  });
+  const [a] = alerts;
+  assert.ok(a);
+  assert.deepEqual(a.plantedIn, ['acme-payments/deploy/legacy/billing.env:7']);
+  assert.equal(a.status, 'retired');
+  assert.equal(a.botHint, 'Slack link preview');
+  assert.equal(a.clientIp, '203.0.113.47');
+  assert.ok(a.path.length <= 303);
+});
+
+test('formatAlert keeps attacker input inside code spans and flags retired traps', () => {
   const text = formatAlert({
     trapId: 'abc',
     label: 'x',
+    status: 'retired',
     matched: ['url'],
     plantedIn: [],
     method: 'GET',
-    path: '/a`<!channel>`\n@everyone',
-    remoteAddress: '1.2.3.4',
+    path: '/a`<!channel>` @everyone',
+    clientIp: '1.2.3.4',
+    suppressed: 3,
     at: 'now',
   });
-  const requestLine = text.split('\n').find((l) => l.startsWith('request:'));
-  assert.equal(requestLine, "request: `GET /a'<!channel>' @everyone`");
+  assert.match(text, /^\[honeytoken\] trap triggered: x \(retired trap\)/);
+  assert.match(text, /\nrequest: `GET \/a'<!channel>' @everyone`\n/);
+  assert.match(text, /suppressed: 3 more hits/);
 });

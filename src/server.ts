@@ -1,54 +1,43 @@
 import http from 'node:http';
-import { containsTrap, readLock } from './lock.ts';
-import { notifyConfigFromEnv, sendAlert, type Alert } from './notify.ts';
-import type { Trap } from './trap.ts';
+import { handle } from './core/handle.ts';
+import type { Alert, Trap } from './core/types.ts';
+import { createDispatcher, notifiersFromEnv } from './notify/index.ts';
+import { appendAlert, readRegistry } from './store.ts';
 
-export interface ServerOptions {
-  lockPath: string;
+export interface ServeOptions {
+  home: string;
   host?: string;
   port?: number;
-  /** Defaults to console + Slack/Discord forwarding configured through env vars. */
+  cooldownMs?: number;
+  /** Replaces the default pipeline (alerts.jsonl + cooldown + env-configured notifiers). */
   onAlert?: (alert: Alert) => void | Promise<void>;
 }
 
 const MAX_BODY = 64 * 1024;
 
-/**
- * Every request is checked against every trap in the lock: the trap id may show up in the
- * path, and the token in a header, the query string, Basic auth or the body. The lock is
- * re-read per request so traps created while the server runs are picked up immediately.
- */
-export function startServer(opts: ServerOptions): Promise<http.Server> {
-  const onAlert = opts.onAlert ?? ((alert: Alert) => sendAlert(alert, notifyConfigFromEnv()));
+/** node:http adapter around the Web-standard `handle()` in core. */
+export function serve(opts: ServeOptions): Promise<http.Server> {
+  const onAlert =
+    opts.onAlert ??
+    createDispatcher({
+      notifiers: notifiersFromEnv(),
+      log: (alert) => appendAlert(opts.home, alert),
+      cooldownMs: opts.cooldownMs,
+    });
 
   const server = http.createServer(async (req, res) => {
-    const body = await readBody(req);
-    const url = req.url ?? '/';
-    const haystack = [url, body, ...headerValues(req), decodeBasicAuth(req.headers.authorization)].join('\n');
-
-    const hits = loadTraps(opts.lockPath).filter((trap) => containsTrap(haystack, trap));
-
-    // Answer like an API rejecting a bad key, so the caller learns nothing.
-    res.writeHead(hits.length ? 401 : 404, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ error: hits.length ? 'unauthorized' : 'not_found' }));
-
-    for (const trap of hits) {
-      const alert: Alert = {
-        trapId: trap.id,
-        label: trap.label,
-        matched: [
-          ...(haystack.includes(trap.id) ? (['url'] as const) : []),
-          ...(haystack.includes(trap.token) ? (['token'] as const) : []),
-        ],
-        plantedIn: trap.placements.map((p) => `${p.file}:${p.line}`),
-        method: req.method ?? '?',
-        path: url,
-        remoteAddress: req.socket.remoteAddress ?? '',
-        forwardedFor: firstHeader(req.headers['x-forwarded-for']),
-        userAgent: firstHeader(req.headers['user-agent']),
-        at: new Date().toISOString(),
-      };
-      Promise.resolve(onAlert(alert)).catch((err) => console.error('[honeytoken] alert handler failed:', err));
+    try {
+      const response = await handle(await toRequest(req), {
+        traps: () => loadTraps(opts.home),
+        onAlert: (alert) => void Promise.resolve(onAlert(alert)).catch((err) => console.error('[honeytoken] alert failed:', err)),
+        clientIp: req.socket.remoteAddress ?? '',
+      });
+      res.writeHead(response.status, Object.fromEntries(response.headers));
+      res.end(Buffer.from(await response.arrayBuffer()));
+    } catch (err) {
+      console.error('[honeytoken] request failed:', err);
+      if (!res.headersSent) res.writeHead(400);
+      res.end();
     }
   });
 
@@ -58,16 +47,32 @@ export function startServer(opts: ServerOptions): Promise<http.Server> {
   });
 }
 
-function loadTraps(lockPath: string): Trap[] {
+function loadTraps(home: string): Trap[] {
   try {
-    return readLock(lockPath).traps;
+    return readRegistry(home).traps;
   } catch (err) {
-    console.error(`[honeytoken] cannot read ${lockPath}:`, err);
+    console.error('[honeytoken] cannot read registry:', err);
     return [];
   }
 }
 
-function readBody(req: http.IncomingMessage): Promise<string> {
+async function toRequest(req: http.IncomingMessage): Promise<Request> {
+  const headers = new Headers();
+  for (let i = 0; i + 1 < req.rawHeaders.length; i += 2) {
+    try {
+      headers.append(req.rawHeaders[i]!, req.rawHeaders[i + 1]!);
+    } catch {
+      // a header the Fetch API rejects; Node accepted it, we can skip it
+    }
+  }
+  const method = req.method ?? 'GET';
+  const body = method === 'GET' || method === 'HEAD' ? undefined : await readBody(req);
+  // Host is attacker-controlled, so build the URL on a fixed origin.
+  return new Request(new URL(req.url ?? '/', 'http://localhost'), { method, headers, body });
+}
+
+/** Keep the first 64 KB and drain the rest so the client sees a normal response. */
+function readBody(req: http.IncomingMessage): Promise<Uint8Array<ArrayBuffer>> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -75,20 +80,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
       if (size < MAX_BODY) chunks.push(chunk);
       size += chunk.length;
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8', 0, MAX_BODY)));
-    req.on('error', () => resolve(''));
+    req.on('end', () => resolve(new Uint8Array(Buffer.concat(chunks).subarray(0, MAX_BODY))));
+    req.on('error', () => resolve(new Uint8Array(0)));
   });
-}
-
-function headerValues(req: http.IncomingMessage): string[] {
-  return Object.values(req.headers).flatMap((v) => v ?? []);
-}
-
-function firstHeader(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function decodeBasicAuth(header: string | undefined): string {
-  const match = header?.match(/^Basic\s+(\S+)/i);
-  return match?.[1] ? Buffer.from(match[1], 'base64').toString('utf8') : '';
 }

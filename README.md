@@ -16,7 +16,7 @@
 
 <h3>Tell your coding agent <code>plant honeytokens in this repo</code>.<br>A minute later, your repo is booby-trapped in its own accent.</h3>
 
-[How it works](#the-brain-and-the-hands) · [Quickstart](#quickstart) · [Anatomy of an alert](#anatomy-of-an-alert) · [Paranoid by default](#paranoid-by-default) · [Reference](#reference)
+[How it works](#the-brain-and-the-hands) · [Quickstart](#quickstart) · [Anatomy of an alert](#anatomy-of-an-alert) · [Paranoid by default](#paranoid-by-default) · [Architecture](#architecture) · [Reference](#reference)
 
 </div>
 
@@ -41,6 +41,7 @@ someone is using them. The idea is old. The problem has always been the planting
 | **Will production call it by accident?** | Hopefully not | The playbook makes the agent prove nothing loads the file |
 | **Where did it leak from?** | You check your notes | The alert says `deploy/legacy/billing.env:7` |
 | **Removing it later** | Find and delete by hand | `clean_traps`: one call, with a dry run first |
+| **After removal** | The token is dead, old leaks go unnoticed | The trap is *retired* and keeps watching: git history still holds the bait |
 
 <br>
 
@@ -56,31 +57,31 @@ sequenceDiagram
     participant Agent as Coding agent<br/>(the brain)
     participant MCP as honeytoken mcp<br/>(the hands)
     participant Repo as Your repo
-    participant Lock as honeytoken.lock<br/>(local only)
+    participant Reg as ~/.honeytoken<br/>(outside the repo)
     participant Server as honeytoken serve
     actor Intruder
 
     You->>Agent: "plant honeytokens in this repo"
     Agent->>Repo: read .env.example, config/, routes
     Agent->>MCP: create_webhook_trap(pathPrefix, tokenPrefix)
-    MCP->>Lock: record trap
+    MCP->>Reg: record trap
     MCP-->>Agent: url + token
     Agent->>Repo: write decoy on one line, in a file nothing loads
     Agent->>MCP: register_planted_token(id, file)
     MCP->>Repo: read file, find the lines itself
-    MCP->>Lock: record file:line
+    MCP->>Reg: record file:line
     Note over Repo,Intruder: ... days pass, the repo leaks ...
     Intruder->>Server: tries the key / calls the URL
-    Server->>Lock: which trap? planted where?
+    Server->>Reg: which trap? planted where?
     Server-->>Intruder: 401 {"error":"unauthorized"}
-    Server->>You: Slack / Discord / console:<br/>"deploy/legacy/billing.env:7 leaked"
+    Server->>You: Slack / Discord / console:<br/>"acme-payments/deploy/legacy/billing.env:7 leaked"
 ```
 
 | Part | What it is | What it does |
 |---|---|---|
 | **Agent Skill** | [`skills/honeytoken-planting/SKILL.md`](skills/honeytoken-planting/SKILL.md) | A short playbook: study the repo's naming → issue a trap → plant it where nothing loads it → register → verify |
-| **MCP server** | `honeytoken mcp` | Four tools, nothing more: `create_webhook_trap`, `register_planted_token`, `list_traps`, `clean_traps` |
-| **Alert server** | `honeytoken serve` | Receives hits, matches them to traps, forwards to Slack and Discord |
+| **MCP server** | `honeytoken mcp` | Five tools, nothing more: `create_webhook_trap`, `register_planted_token`, `list_traps`, `clean_traps`, `list_alerts` |
+| **Alert server** | `honeytoken serve` | One process for every repo. Matches hits to traps, logs them, forwards to Slack and Discord |
 | **CLI** | `honeytoken …` | Everything above, by hand |
 
 <br>
@@ -103,7 +104,7 @@ npm link               # optional: puts `honeytoken` on your PATH
 ```bash
 export HONEYTOKEN_SLACK_WEBHOOK=https://hooks.slack.com/services/…     # optional
 export HONEYTOKEN_DISCORD_WEBHOOK=https://discord.com/api/webhooks/…   # optional
-honeytoken serve --lock /path/to/target-repo/honeytoken.lock
+honeytoken serve       # watches every repo you plant in; data lives in ~/.honeytoken
 ```
 
 **3. Hand your agent the tools and the playbook**
@@ -137,8 +138,9 @@ playbook as MCP instructions.
 **5. Prove it fires**
 
 ```bash
-honeytoken list --lock /path/to/target-repo/honeytoken.lock
+honeytoken list
 curl -X POST <trap url>
+honeytoken alerts
 ```
 
 <br>
@@ -149,7 +151,8 @@ The trap URL is baked in when the trap is created, so set `HONEYTOKEN_BASE_URL` 
 
 - **Local (default):** `http://127.0.0.1:8787`. Good for trying it out; only fires on your machine.
 - **For real:** run `honeytoken serve --host 0.0.0.0` behind something the internet can reach (a small VPS, a
-  reverse proxy, a tunnel) and set `HONEYTOKEN_BASE_URL` to that public URL. Use a hostname that looks
+  reverse proxy, a tunnel), give it a copy of `~/.honeytoken/registry.json`, and set `HONEYTOKEN_BASE_URL` to
+  that public URL. Use a hostname that looks
   like it belongs to you, e.g. `https://hooks.acme-internal.dev`. A decoy pointing at `ngrok-free.app` fools
   nobody.
 
@@ -160,12 +163,20 @@ The trap URL is baked in when the trap is created, so set `HONEYTOKEN_BASE_URL` 
 ```text
 [honeytoken] trap triggered: legacy billing key
 trap: k3v9q2m8x1t7w0p4z6rb (matched url + token)
-planted in: deploy/legacy/billing.env:7, deploy/legacy/billing.env:8
+planted in: acme-payments/deploy/legacy/billing.env:7,8
 request: `POST /api/v2/billing/webhook/k3v9q2m8x1t7w0p4z6rb`
 from: `203.0.113.47`
 user-agent: `python-requests/2.32.3`
 at: 2026-12-14T03:12:09.114Z
 ```
+
+Extra lines appear when they matter:
+
+| Line | When |
+|---|---|
+| `(retired trap)` + `note: this trap was cleaned up, so an old copy of the repo is in use` | The hit came through a trap you already removed: someone is working from history or an old clone |
+| `likely: Slack link preview (link previews fetch URLs on their own)` | The user agent belongs to Slack, Discord, Teams, X, LinkedIn, WhatsApp, GitHub's image proxy or a search crawler |
+| `suppressed: 41 more hits from this address since the last alert` | The cooldown (default 10 min per trap and address) held back repeats. All of them are still in `alerts.jsonl` |
 
 **What fires a trap**
 
@@ -185,18 +196,58 @@ A honeytoken tool that gives itself away is worse than none. These are enforced 
 
 | | |
 |---|---|
-| 🔒 **The lock never reaches git** | `honeytoken.lock` maps every trap to its location. On first write it is added to `.git/info/exclude`, never `.gitignore`, because a committed ignore line would itself say "there are honeytokens here". |
+| 🏠 **Nothing but the decoy touches your repo** | The map of every trap lives in `~/.honeytoken`, not in the repo: no lock file, no ignore entry (a committed ignore line would itself say "there are honeytokens here"), and `git clean` can't wipe it. The skill installs to `~/.claude/skills`, and `claude mcp add` uses local scope. |
 | 🧭 **The agent can't pick the alert host** | The base URL comes only from `HONEYTOKEN_BASE_URL` or the CLI. A model that invents a convincing domain would build a trap that never fires. |
 | 🔍 **Placements are verified, not trusted** | `register_planted_token` reads the file and finds the lines itself. It refuses unplanted traps and paths outside the repo. |
 | 🧨 **Request data is treated as hostile** | Attacker-supplied path and user agent are clipped and kept inside code spans; Slack text is escaped and Discord mentions are disabled, so nobody gets `@everyone`'d through your alert. |
 | 🥱 **The server is boring on purpose** | Hits get `401 {"error":"unauthorized"}` like any API rejecting a key. No banner, no version, no health endpoint. |
+| 🪦 **Cleaning retires, it doesn't forget** | Removed traps keep alerting. The decoy lives on in git history and every clone made before the cleanup, and that is exactly the leak you want to hear about. |
+| 💉 **Alerts can't steer your agent** | `list_alerts` hands the agent attacker-written fields labelled as untrusted data, and the skill forbids acting on them. A user agent saying "ignore previous instructions" stays a string. |
+| 🔐 **Writes never collide** | The CLI and every MCP server share one registry under a lock file, written atomically with mode `0600`. Tested with four processes racing. |
 | 🤐 **Tokens aren't echoed** | `list_traps` returns locations, not secrets. |
-| 🏠 **Nothing lands in the target repo but the decoy** | The skill installs to `~/.claude/skills`, and `claude mcp add` uses local scope. Don't add a committed `.mcp.json` or project skill to a repo you plant in. |
 
 > [!IMPORTANT]
 > **A fake key alone is not a tripwire.** If an intruder tries a fake `sk_live_` key against the real Stripe,
 > you hear nothing. The playbook therefore pairs every token with the trap URL in the endpoint variable next
 > to it, so trying the key means calling your server.
+
+<br>
+
+## Architecture
+
+Small on purpose, with seams where a second implementation is real:
+
+```
+src/
+  core/        Web-standard only (Request, Response, URL, Web Crypto): runs on Node, Workers, Deno, Bun
+  notify/      one file per channel: (alert) => Promise<void>
+  store.ts     ~/.honeytoken: registry.json (locked, atomic) + alerts.jsonl
+  service.ts   issue · register · list · clean · alerts (every rule lives here)
+  server.ts    node:http → core.handle()
+  mcp.ts       thin shell over the service
+  cli.ts       thin shell over the service
+```
+
+The alert path is one Web-standard function, so moving it to the edge is an adapter, not a rewrite:
+
+```ts
+import { handle, type Trap } from 'honeytoken-mcp/core';
+
+export default {
+  fetch: (req: Request, env: { TRAPS: KVNamespace }) =>
+    handle(req, {
+      traps: async () => (await env.TRAPS.get<Trap[]>('traps', 'json')) ?? [],
+      onAlert: (alert) => console.log(JSON.stringify(alert)),
+      clientIp: req.headers.get('cf-connecting-ip') ?? '',
+    }),
+};
+```
+
+| Entry point | For |
+|---|---|
+| `honeytoken-mcp/core` | `handle`, `generateTrap`, `trapsIn`, `formatAlert` and the types. No Node APIs. |
+| `honeytoken-mcp/notify` | `slack`, `discord`, `createDispatcher` (cooldown), `notifiersFromEnv` |
+| `honeytoken-mcp` | `createService()`: the same API the CLI and MCP server use |
 
 <br>
 
@@ -211,8 +262,9 @@ A honeytoken tool that gives itself away is worse than none. These are enforced 
 |---|---|---|
 | `create_webhook_trap` | `label?`, `pathPrefix?` (default `/v1/hooks`), `tokenPrefix?` (≤ 32 of `[A-Za-z0-9._-]`), `tokenLength?` (16–128, default 32), `tokenCharset?` (`alnum` \| `hex`) | `id`, `url`, `token`, `next`, and `warning` when no base URL is set |
 | `register_planted_token` | `id`, `file` (repo-relative), `line?` (an assertion, not a hint) | the placements found |
-| `list_traps` | none | id, label, url, createdAt, `file:line` placements. No tokens. |
-| `clean_traps` | `ids` **or** `all: true`, `dryRun?` | per trap: lines removed per file, recorded files now missing |
+| `list_traps` | `includeRetired?` | id, label, status, url, createdAt, `repo/file:lines`. No tokens. |
+| `clean_traps` | `ids` **or** `all: true`, `dryRun?` | per trap: lines removed per file, recorded files now missing. Traps become `retired` and keep alerting |
+| `list_alerts` | `limit?` (1–200, default 20) | recent hits, oldest first, with an explicit "attacker-controlled" notice |
 
 </details>
 
@@ -224,13 +276,14 @@ A honeytoken tool that gives itself away is worse than none. These are enforced 
 ```text
 honeytoken create          [--label] [--path-prefix] [--token-prefix] [--token-length] [--charset alnum|hex] [--base-url]
 honeytoken register <id> <file> [--line n]
-honeytoken list            [--json]
+honeytoken list            [--all] [--json]
 honeytoken clean <id...> | --all  [--dry-run]
-honeytoken serve           [--host 127.0.0.1] [--port 8787]
+honeytoken alerts          [--limit 20] [--json]
+honeytoken serve           [--host 127.0.0.1] [--port 8787] [--cooldown 600]
 honeytoken mcp
 honeytoken install-skill   [--dir ~/.claude/skills]
 
-global: --lock <path>      (env HONEYTOKEN_LOCK, default ./honeytoken.lock)
+global: --home <path>      (env HONEYTOKEN_HOME, default ~/.honeytoken)
 ```
 
 </details>
@@ -243,14 +296,14 @@ global: --lock <path>      (env HONEYTOKEN_LOCK, default ./honeytoken.lock)
 | Variable | Used by | Meaning |
 |---|---|---|
 | `HONEYTOKEN_BASE_URL` | `create`, `mcp` | Public URL of your alert server. Default `http://127.0.0.1:8787` |
-| `HONEYTOKEN_LOCK` | all | Lock file path. Default `./honeytoken.lock` |
+| `HONEYTOKEN_HOME` | all | Data directory: `registry.json`, `alerts.jsonl`. Default `~/.honeytoken` |
 | `HONEYTOKEN_SLACK_WEBHOOK` | `serve` | Slack incoming webhook URL |
 | `HONEYTOKEN_DISCORD_WEBHOOK` | `serve` | Discord webhook URL |
 
 </details>
 
 <details>
-<summary><b><code>honeytoken.lock</code></b></summary>
+<summary><b><code>~/.honeytoken/registry.json</code></b></summary>
 
 <br>
 
@@ -264,18 +317,20 @@ global: --lock <path>      (env HONEYTOKEN_LOCK, default ./honeytoken.lock)
       "label": "legacy billing key in deploy/legacy/billing.env",
       "url": "https://hooks.example.com/api/v2/billing/webhook/k3v9q2m8x1t7w0p4z6rb",
       "token": "sk_live_Qm7rT2xVb9cWn4Lp8sYd…",
+      "status": "active",
       "createdAt": "2026-11-25T01:02:03.000Z",
       "placements": [
-        { "file": "deploy/legacy/billing.env", "line": 7, "plantedAt": "2026-11-25T01:02:41.000Z" },
-        { "file": "deploy/legacy/billing.env", "line": 8, "plantedAt": "2026-11-25T01:02:41.000Z" }
+        { "repo": "/Users/you/src/acme-payments", "file": "deploy/legacy/billing.env", "line": 7, "plantedAt": "2026-11-25T01:02:41.000Z" },
+        { "repo": "/Users/you/src/acme-payments", "file": "deploy/legacy/billing.env", "line": 8, "plantedAt": "2026-11-25T01:02:41.000Z" }
       ]
     }
   ]
 }
 ```
 
-Written atomically with mode `0600`. Back it up somewhere private; without it, `clean` can't find your traps.
-The alert server re-reads it on every request, so new traps are live without a restart.
+Written under a lock, atomically, with mode `0600`. Back the directory up somewhere private; without it,
+`clean` can't find your traps. The alert server re-reads it on every request, so new traps are live without a
+restart. Every hit is appended to `alerts.jsonl` next to it.
 
 </details>
 
@@ -285,7 +340,7 @@ The alert server re-reads it on every request, so new traps are live without a r
 
 - **Webhook traps only.** No AWS / GCP / database credential canaries yet.
 - **You host the alert server.** If it is down, hits are lost.
-- **No alert de-duplication.** A script hammering a trap sends one alert per request.
+- **`list_alerts` reads the local log.** If the alert server runs on another machine, its `alerts.jsonl` is there.
 - **`clean` deletes whole lines.** That is why the playbook keeps every decoy on its own line. Comments the
   agent wrote above a decoy are left for the agent to tidy.
 - **The agent is only as careful as the playbook.** Review the diff before you commit it.
@@ -296,7 +351,9 @@ The alert server re-reads it on every request, so new traps are live without a r
 
 - [x] Webhook / URL traps with repo-matched token formats
 - [x] MCP server, Agent Skill, alert server, Slack and Discord forwarding
-- [ ] Alert de-duplication and rate limiting
+- [x] Alert cooldown, link-preview bot hints, alert log
+- [x] Retired traps that keep watching; one registry for every repo
+- [ ] Cloudflare Worker adapter (`core` already runs there)
 - [ ] Cloud credential canaries (AWS IAM keys that alert through CloudTrail)
 - [ ] DNS traps
 - [ ] `npx honeytoken-mcp` on npm
@@ -313,8 +370,8 @@ npm test             # node:test, runs TypeScript sources directly
 npm run typecheck
 ```
 
-Read [`AGENTS.md`](AGENTS.md) first, whether you are a human or an agent. It lists the security invariants a
-change must not break.
+Read [`AGENTS.md`](AGENTS.md) first, whether you are a human or an agent. It lists the seams, the layer rules and
+the security invariants a change must not break. A new alert channel is one file in `src/notify/`.
 
 <br>
 

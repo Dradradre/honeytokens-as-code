@@ -1,26 +1,9 @@
-import { randomInt } from 'node:crypto';
-
-export interface Placement {
-  /** Path relative to the directory that holds honeytoken.lock. */
-  file: string;
-  line: number;
-  plantedAt: string;
-}
-
-export interface Trap {
-  id: string;
-  kind: 'webhook';
-  label: string;
-  url: string;
-  token: string;
-  createdAt: string;
-  placements: Placement[];
-}
+import type { Trap } from './types.ts';
 
 export interface TrapOptions {
   /** Where the alert server is reachable, e.g. https://hooks.example.com */
   baseUrl: string;
-  /** Free-form note for humans, e.g. "payments .env". Never shown to attackers. */
+  /** Free-form note for the owner. Never planted. */
   label?: string;
   /** URL path placed before the trap id, chosen to blend in (e.g. /v2/billing/callback). */
   pathPrefix?: string;
@@ -39,13 +22,20 @@ const CHARSETS = {
 const PATH_PREFIX_RE = /^(\/[A-Za-z0-9._~-]+)*$/;
 const TOKEN_PREFIX_RE = /^[A-Za-z0-9._-]{0,32}$/;
 
+/** Uniform random string from Web Crypto (rejection sampling, so no modulo bias). */
 function randomString(chars: string, length: number): string {
+  const limit = 256 - (256 % chars.length);
   let out = '';
-  for (let i = 0; i < length; i++) out += chars[randomInt(chars.length)];
+  while (out.length < length) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(length * 2))) {
+      if (byte < limit) out += chars[byte % chars.length];
+      if (out.length === length) break;
+    }
+  }
   return out;
 }
 
-export function createTrap(opts: TrapOptions): Trap {
+export function generateTrap(opts: TrapOptions): Trap {
   const pathPrefix = (opts.pathPrefix ?? '/v1/hooks').replace(/\/+$/, '');
   if (!PATH_PREFIX_RE.test(pathPrefix) || pathPrefix.split('/').some((s) => /^\.+$/.test(s))) {
     throw new Error(`invalid pathPrefix "${opts.pathPrefix}": use segments like /api/v2/callback`);
@@ -70,6 +60,7 @@ export function createTrap(opts: TrapOptions): Trap {
     label: opts.label ?? '',
     url: `${base.origin}${base.pathname.replace(/\/+$/, '')}${pathPrefix}/${id}`,
     token: tokenPrefix + randomString(CHARSETS[opts.tokenCharset ?? 'alnum'], tokenLength),
+    status: 'active',
     createdAt: new Date().toISOString(),
     placements: [],
   };

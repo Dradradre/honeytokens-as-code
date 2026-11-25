@@ -1,9 +1,24 @@
 {
   "name": "honeytoken-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Plant context-aware honeytokens in your repo through your coding agent, and get alerted when they are used.",
   "license": "MIT",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/service.d.ts",
+      "default": "./dist/service.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./notify": {
+      "types": "./dist/notify/index.d.ts",
+      "default": "./dist/notify/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "honeytoken": "dist/cli.js"
   },

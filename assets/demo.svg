@@ -44,13 +44,13 @@
   <text class="ln" style="animation-name:l9" x="32" y="286" xml:space="preserve"><tspan fill="#4A5361">  7 </tspan><tspan fill="#3DDC97">+ BILLING_GATEWAY_URL=https://hooks.example.com/api/v2/billing/webhook/k3v9q…</tspan></text>
   <text class="ln" style="animation-name:l10" x="32" y="310" xml:space="preserve"><tspan fill="#4A5361">  8 </tspan><tspan fill="#3DDC97">+ BILLING_GATEWAY_KEY=sk_live_Qm7rT2xVb9cWn4Lp8sYd…</tspan></text>
   <text class="ln" style="animation-name:l11" x="32" y="334" xml:space="preserve"><tspan fill="#F5A524">● </tspan><tspan fill="#5CC8FF">honeytoken</tspan><tspan fill="#7D8590"> › </tspan><tspan fill="#E6EDF3">register_planted_token</tspan><tspan fill="#3DDC97">   ✓ found on lines 7, 8</tspan></text>
-  <text class="ln" style="animation-name:l12" x="32" y="358" xml:space="preserve"><tspan fill="#3DDC97" font-weight="700">✓ 1 trap armed. </tspan><tspan fill="#7D8590">honeytoken.lock is excluded from git.</tspan></text>
+  <text class="ln" style="animation-name:l12" x="32" y="358" xml:space="preserve"><tspan fill="#3DDC97" font-weight="700">✓ 1 trap armed. </tspan><tspan fill="#7D8590">Only the decoy lines changed in this repo.</tspan></text>
   
   <text class="ln" style="animation-name:l14" x="32" y="406" xml:space="preserve"><tspan fill="#4A5361">──────────────────────────────────────  19 days later  ──────────────────────────────────────</tspan></text>
   
   <text class="ln" style="animation-name:l16" x="32" y="454" xml:space="preserve"><tspan fill="#FF4D4F" font-weight="700">[honeytoken] trap triggered: legacy billing key</tspan></text>
   <text class="ln" style="animation-name:l17" x="32" y="478" xml:space="preserve"><tspan fill="#7D8590">trap:       </tspan><tspan fill="#E6EDF3">k3v9q2m8x1t7w0p4z6rb</tspan><tspan fill="#7D8590"> (matched url + token)</tspan></text>
-  <text class="ln" style="animation-name:l18" x="32" y="502" xml:space="preserve"><tspan fill="#7D8590">planted in: </tspan><tspan fill="#FFD27A">deploy/legacy/billing.env:7, deploy/legacy/billing.env:8</tspan></text>
+  <text class="ln" style="animation-name:l18" x="32" y="502" xml:space="preserve"><tspan fill="#7D8590">planted in: </tspan><tspan fill="#FFD27A">acme-payments/deploy/legacy/billing.env:7,8</tspan></text>
   <text class="ln" style="animation-name:l19" x="32" y="526" xml:space="preserve"><tspan fill="#7D8590">request:    </tspan><tspan fill="#E6EDF3">POST /api/v2/billing/webhook/k3v9q2m8x1t7w0p4z6rb</tspan></text>
   <text class="ln" style="animation-name:l20" x="32" y="550" xml:space="preserve"><tspan fill="#7D8590">from:       </tspan><tspan fill="#E6EDF3">203.0.113.47</tspan><tspan fill="#7D8590">    user-agent: </tspan><tspan fill="#E6EDF3">python-requests/2.32.3</tspan></text>
 </svg>
