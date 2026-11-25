@@ -8,6 +8,8 @@
 
 <br>
 
+[![npm](https://img.shields.io/npm/v/honeytokens-as-code?style=flat-square&color=F5A524)](https://www.npmjs.com/package/honeytokens-as-code)
+[![CI](https://img.shields.io/github/actions/workflow/status/Dradradre/honeytokens-as-code/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Dradradre/honeytokens-as-code/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-F5A524?style=flat-square)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.18-3DDC97?style=flat-square&logo=node.js&logoColor=white)](package.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio-5CC8FF?style=flat-square)](https://modelcontextprotocol.io)
@@ -115,9 +117,8 @@ CloudTrail로 사용을 감지합니다(권한 없는 IAM 사용자라는 발상
 
 ## 빠른 시작
 
-> [!NOTE]
-> 아직 npm에 올리지 않았습니다. 그때까지는 클론해서 `npm install && node dist/cli.js init`으로 쓰세요
-> (또는 `npm link` 한 번 뒤 `honeytoken init`).
+> [!TIP]
+> 늘 쓰는 명령으로 두고 싶다면 `npm install -g honeytokens-as-code` 후 `honeytoken init`.
 
 **1. 설정** (기기당 한 번)
 
@@ -487,7 +488,7 @@ global: --home <path>        (env HONEYTOKEN_HOME, default ~/.honeytoken)
 - [ ] GCP, Azure 자격 증명 카나리
 - [ ] Cloudflare Worker 어댑터 (`core`는 이미 그대로 돌아감)
 - [ ] DNS 트랩
-- [ ] npm 배포 (`npx honeytokens-as-code`)
+- [x] npm 배포 (`npx honeytokens-as-code`)
 - [ ] 범용 웹훅, PagerDuty 전달
 
 <br>
@@ -495,12 +496,14 @@ global: --home <path>        (env HONEYTOKEN_HOME, default ~/.honeytoken)
 ## 기여
 
 ```bash
+git clone https://github.com/Dradradre/honeytokens-as-code && cd honeytokens-as-code
 npm install
 npm test             # node:test, TypeScript 소스 직접 실행
 npm run typecheck    # 소스와 테스트 모두
 ```
 
 사람이든 에이전트든 [`AGENTS.md`](AGENTS.md)부터 읽어 주세요. 이음매, 계층 규칙, 어떤 변경도 깨면 안 되는 보안 불변식이 정리돼 있습니다. 알림 채널 추가는 `src/notify/`에 파일 하나면 됩니다.
+취약점을 찾으셨다면 공개 이슈 말고 비공개로 알려 주세요: [`SECURITY.md`](SECURITY.md).
 
 <br>
 

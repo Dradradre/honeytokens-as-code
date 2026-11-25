@@ -8,6 +8,8 @@
 
 <br>
 
+[![npm](https://img.shields.io/npm/v/honeytokens-as-code?style=flat-square&color=F5A524)](https://www.npmjs.com/package/honeytokens-as-code)
+[![CI](https://img.shields.io/github/actions/workflow/status/Dradradre/honeytokens-as-code/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/Dradradre/honeytokens-as-code/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-F5A524?style=flat-square)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.18-3DDC97?style=flat-square&logo=node.js&logoColor=white)](package.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio-5CC8FF?style=flat-square)](https://modelcontextprotocol.io)
@@ -119,9 +121,8 @@ idea in 2016), and Thinkst offers URL tokens for everything else.
 
 ## Quickstart
 
-> [!NOTE]
-> Not published to npm yet. Until it is, run from a clone: `npm install && node dist/cli.js init`
-> (or `npm link` once, then `honeytoken init`).
+> [!TIP]
+> Rather have a permanent command? `npm install -g honeytokens-as-code`, then `honeytoken init`.
 
 **1. Set up** (once per machine)
 
@@ -508,7 +509,7 @@ new one starts.
 - [ ] GCP and Azure credential canaries
 - [ ] Cloudflare Worker adapter (`core` already runs there)
 - [ ] DNS traps
-- [ ] `npx honeytokens-as-code` on npm
+- [x] On npm: `npx honeytokens-as-code`
 - [ ] Generic webhook and PagerDuty forwarding
 
 <br>
@@ -516,6 +517,7 @@ new one starts.
 ## Contributing
 
 ```bash
+git clone https://github.com/Dradradre/honeytokens-as-code && cd honeytokens-as-code
 npm install
 npm test             # node:test, runs TypeScript sources directly
 npm run typecheck    # sources and tests
@@ -523,6 +525,7 @@ npm run typecheck    # sources and tests
 
 Read [`AGENTS.md`](AGENTS.md) first, whether you are a human or an agent. It lists the seams, the layer rules and
 the security invariants a change must not break. A new alert channel is one file in `src/notify/`.
+Found a vulnerability? Please report it privately: see [`SECURITY.md`](SECURITY.md).
 
 <br>
 

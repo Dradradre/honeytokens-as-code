@@ -3,6 +3,15 @@
   "version": "0.5.0",
   "description": "Your coding agent plants honeytokens in your repos: real, powerless AWS keys and internal-looking webhook traps, tracked, checked and rotated. Not a canary that watches your agent.",
   "license": "MIT",
+  "author": "Dradradre",
+  "homepage": "https://github.com/Dradradre/honeytokens-as-code#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dradradre/honeytokens-as-code.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Dradradre/honeytokens-as-code/issues"
+  },
   "type": "module",
   "exports": {
     ".": {
