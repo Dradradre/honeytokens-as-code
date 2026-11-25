@@ -63,6 +63,13 @@ jobs:
           test "$(jq -r .version server.json)" = "${GITHUB_REF_NAME#v}"
           test "$(jq -r '.packages[0].version' server.json)" = "${GITHUB_REF_NAME#v}"
           test "$(jq -r .name server.json)" = "$(node -p "require('./package.json').mcpName")"
+      - name: Wait until npm serves the new version (the registry checks npm, which lags a minute or two)
+        run: |
+          for i in $(seq 1 30); do
+            npm view "$(node -p "require('./package.json').name")@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1 && exit 0
+            sleep 10
+          done
+          echo "npm still does not serve ${GITHUB_REF_NAME} after 5 minutes"; exit 1
       - name: Publish to the MCP Registry
         run: |
           ./mcp-publisher login github-oidc
