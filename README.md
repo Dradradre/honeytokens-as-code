@@ -31,43 +31,13 @@
 <img src="assets/demo.svg" alt="Recorded from a real run: Claude Code reads a demo payments repo, creates an AWS trap and a webhook trap, plants them in infra/old/values.staging.yaml and deploy/legacy/gateway.staging.env, registers them, and an intruder's use of the AWS key raises an alert naming the leaked file." width="100%">
 
 <sub>Recorded from a real run: a separate Claude Code session got only the prompt above, the skill and the MCP server, and picked the
-spots, names and prefixes itself in 56 s (20 turns, about $0.40). The AWS part ran against a local AWS emulator; the alerts went
-through the real alert server to a Slack webhook.</sub>
+spots, names and prefixes itself in 50 s (20 turns, about $0.27). The AWS part ran against a local AWS emulator; the alerts went
+through the real alert server to a real Slack channel:</sub>
 
-<details>
-<summary><b>The three messages that run sent to Slack</b></summary>
+<img src="assets/slack-alerts.png" alt="The three alerts from that run in a Slack channel: the webhook trap in deploy/legacy/gateway.staging.env, the AWS key's GetCallerIdentity call, and a summary of the denied S3 ListBuckets attempt held back by the cooldown." width="100%">
 
-```text
-[honeytoken] trap triggered: legacy gateway key in deploy/legacy/gateway.staging.env
-trap: efamiew7vhkcg1u83ku4 (matched url + token)
-planted in: acme-payments/deploy/legacy/gateway.staging.env:4,5
-request: `POST /api/v1/gateway/efamiew7vhkcg1u83ku4`
-from: `127.0.0.1`
-user-agent: `python-requests/2.32.3`
-at: 2026-11-25T04:50:11.187Z
-
-[honeytoken] trap triggered: old staging uploader key in infra/old/values.staging.yaml
-trap: fn9szhu6pofb6oo0k1wd (matched cloudtrail)
-planted in: acme-payments/infra/old/values.staging.yaml:10,11
-request: `AWS sts.amazonaws.com GetCallerIdentity (us-east-1)`
-from: `127.0.0.1`
-user-agent: `aws-cli/1.46.3 …`
-at: 2026-11-25T04:50:10.911Z
-
-[honeytoken] trap triggered: old staging uploader key in infra/old/values.staging.yaml
-trap: fn9szhu6pofb6oo0k1wd (matched cloudtrail)
-planted in: acme-payments/infra/old/values.staging.yaml:10,11
-request: `AWS s3.amazonaws.com ListBuckets -> AccessDenied (ap-northeast-2)`
-from: `127.0.0.1`
-user-agent: `aws-cli/1.46.3 …`
-suppressed: 1 more hits on this trap since the last alert
-at: 2026-11-25T04:50:11.156Z
-```
-
-The third one is the cooldown summary: the S3 attempt came seconds after the first call from the same address, so it was held
-back and sent when the window closed instead of being dropped.
-
-</details>
+<sub>The third message is the cooldown summary: the S3 attempt came seconds after the first call from the same address, so it was
+held back and sent when the window closed instead of being dropped.</sub>
 
 <br>
 

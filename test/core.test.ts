@@ -139,4 +139,5 @@ test('formatAlert keeps attacker input inside code spans and flags retired traps
   assert.match(text, /^\[honeytoken\] trap triggered: x \(retired trap\)/);
   assert.match(text, /\nrequest: `GET \/a'<!channel>' @everyone`\n/);
   assert.match(text, /suppressed: 3 more hits/);
+  assert.match(formatAlert({ trapId: 'abc', label: 'x', status: 'active', matched: ['url'], plantedIn: [], method: 'GET', path: '/', clientIp: '', suppressed: 1, at: 'now' }), /suppressed: 1 more hit on this trap/);
 });
