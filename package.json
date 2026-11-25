@@ -57,12 +57,26 @@
   },
   "keywords": [
     "honeytoken",
+    "honeytokens",
     "canary-token",
+    "canarytoken",
+    "canary-tokens",
     "deception",
+    "cyber-deception",
+    "aws-canary",
+    "cloudtrail",
+    "aws-security",
+    "secret-leak",
+    "secrets-detection",
+    "intrusion-detection",
+    "devsecops",
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "claude-code",
+    "cursor",
     "agent-skill",
+    "ai-agents",
     "security"
   ]
 }

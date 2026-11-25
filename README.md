@@ -20,6 +20,8 @@
 
 <p>Say <code>plant honeytokens in this repo</code>. A minute later, real powerless AWS keys and internal-looking<br>webhook traps sit where an intruder would look, written in your repo's own accent, tracked and checked.</p>
 
+<p><sub>Open-source honeytoken and canary token toolkit: an <b>MCP server</b>, an <b>Agent Skill</b> and a <b>CLI</b> that let<br><b>Claude Code</b>, <b>Cursor</b> and other AI coding agents plant <b>AWS canary credentials</b> and <b>webhook tripwires</b> in your<br>repositories, then alert you through <b>CloudTrail</b>, <b>Slack</b> or <b>Discord</b> when a leaked secret is used.</sub></p>
+
 [How it works](#the-brain-and-the-hands) · [Two kinds of trap](#two-kinds-of-trap) · [Quickstart](#quickstart) · [Anatomy of an alert](#anatomy-of-an-alert) · [Paranoid by default](#paranoid-by-default) · [Reference](#reference)
 
 </div>
