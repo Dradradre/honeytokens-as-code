@@ -1,5 +1,5 @@
 {
-  "name": "honeytoken-mcp",
+  "name": "honeytokens-as-code",
   "version": "0.5.0",
   "description": "Your coding agent plants honeytokens in your repos: real, powerless AWS keys and internal-looking webhook traps, tracked, checked and rotated. Not a canary that watches your agent.",
   "license": "MIT",
@@ -20,7 +20,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "honeytoken": "dist/cli.js"
+    "honeytoken": "dist/cli.js",
+    "honeytokens-as-code": "dist/cli.js"
   },
   "files": [
     "dist",

@@ -1,12 +1,12 @@
 # AGENTS.md
 
 Guidance for coding agents (Claude Code, Codex, Cursor, ...) working **on this repository**.
-For the playbook agents follow when **using** honeytoken-mcp in someone else's repo, see
+For the playbook agents follow when **using** Honeytokens as Code in someone else's repo, see
 `skills/honeytoken-planting/SKILL.md`.
 
 ## What this project is
 
-honeytoken-mcp lets a coding agent plant realistic decoy credentials in a repo and alerts the owner when one
+Honeytokens as Code lets a coding agent plant realistic decoy credentials in a repo and alerts the owner when one
 is used. Two kinds of trap: **AWS** (a real access key for an IAM user with an explicit deny-all policy, found in
 CloudTrail when used; the established canary design) and **webhook** (a URL on the alert server plus a token,
 dressed as an internal service). The split of work is the whole design:
@@ -25,7 +25,7 @@ src/
     match.ts       trapMarkers(), lineHasTrap(), trapsIn()
     handle.ts      handle(Request) -> Response, emits Alerts
     format.ts      formatAlert(), describePlacements()
-    index.ts       public API, exported as `honeytoken-mcp/core`
+    index.ts       public API, exported as `honeytokens-as-code/core`
   notify/          one file per channel + index.ts (dispatcher, cooldown, notifiersFromEnv)
   store.ts         ~/.honeytoken: registry.json (locked, atomic), alerts.jsonl, cloudtrail.json
   aws.ts           AWS through the user's `aws` CLI: issue, rotate, delete, status, CloudTrail polling

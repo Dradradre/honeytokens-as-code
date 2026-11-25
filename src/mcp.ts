@@ -26,7 +26,7 @@ async function run(fn: () => unknown): Promise<CallToolResult> {
  * There is deliberately no baseUrl input and no provider-prefix override; those stay with the operator.
  */
 export function createMcpServer(service: Service): McpServer {
-  const server = new McpServer({ name: 'honeytoken-mcp', version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'honeytokens-as-code', version: VERSION }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
     'create_webhook_trap',
@@ -181,5 +181,5 @@ export function createMcpServer(service: Service): McpServer {
 export async function startMcpServer(service: Service): Promise<void> {
   // stdout carries the protocol; anything human-readable must go to stderr.
   await createMcpServer(service).connect(new StdioServerTransport());
-  console.error(`honeytoken-mcp ${VERSION} ready (home: ${service.home})`);
+  console.error(`honeytokens-as-code ${VERSION} ready (home: ${service.home})`);
 }

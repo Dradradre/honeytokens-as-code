@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Alert, Trap } from './core/types.ts';
 
 /**
- * Everything honeytoken-mcp keeps lives in one directory outside every repo
+ * Everything Honeytokens as Code keeps lives in one directory outside every repo
  * (default ~/.honeytoken): nothing but the decoy ever touches the target repo, `git clean`
  * cannot delete the map, and one alert server watches every repo.
  *

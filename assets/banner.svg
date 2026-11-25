@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="100%" role="img" aria-label="honeytoken-mcp: your coding agent plants the bait, you get the alert when someone bites">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="100%" role="img" aria-label="Honeytokens as Code: your coding agent plants the bait, you get the alert when someone bites">
 <defs>
   <polygon id="hex" points="0.00,-30.00 25.98,-15.00 25.98,15.00 0.00,30.00 -25.98,15.00 -25.98,-15.00" stroke="#F5A524" stroke-opacity=".38" stroke-width="1.2"/>
   <clipPath id="card"><rect width="1200" height="400" rx="22"/></clipPath>
@@ -52,7 +52,7 @@
   </g>
 
   <text x="64" y="112" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" fill="#7D8590">MCP server + Agent Skill + alert server</text>
-  <text x="62" y="180" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="60" font-weight="800" letter-spacing="-1.5"><tspan fill="url(#title)">honey</tspan><tspan fill="#E6EDF3">token</tspan><tspan fill="#4A5361">-mcp</tspan></text>
+  <text x="62" y="180" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="50" font-weight="800" letter-spacing="-1.5"><tspan fill="url(#title)">honey</tspan><tspan fill="#E6EDF3">tokens</tspan><tspan fill="#7D8590" font-weight="600"> as code</tspan></text>
   <text x="64" y="226" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="23" fill="#E6EDF3">Your coding agent plants the bait.</text>
   <text x="64" y="258" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="23" fill="#7D8590">You get the alert when someone bites.</text>
 

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="honeytoken-mcp: 코딩 에이전트가 미끼를 심고, 누가 물면 경보를 받는다" width="100%">
+<img src="assets/banner.svg" alt="Honeytokens as Code: 코딩 에이전트가 미끼를 심고, 누가 물면 경보를 받는다" width="100%">
 
 <br>
 
@@ -37,10 +37,10 @@
 아이디어 자체는 오래됐습니다. 늘 걸렸던 건 심는 일이었습니다.
 
 > **헷갈리지 마세요.** 2026년에 쏟아진 도구들 상당수는 *말 안 듣는 AI 에이전트*(프롬프트 인젝션, 유출)를 잡으려고 카나리를 심습니다.
-> honeytoken-mcp는 반대 방향입니다. 에이전트는 내 편이고, 카나리는 내 레포나 CI, 노트북을 훔친 사람을 위한 것입니다.
+> Honeytokens as Code는 반대 방향입니다. 에이전트는 내 편이고, 카나리는 내 레포나 CI, 노트북을 훔친 사람을 위한 것입니다.
 
 
-| | 기존 카나리 토큰 | honeytoken-mcp |
+| | 기존 카나리 토큰 | Honeytokens as Code |
 |---|---|---|
 | **미끼 생김새** | 같은 범용 키를 같은 자리에 | 레포의 다른 서비스 계정처럼 이름 붙인 진짜 AWS 키, 또는 레포의 사내 서비스처럼 꾸민 엔드포인트와 토큰 |
 | **위치 선정** | 사람이 손으로, 급하게 | 레포 구조를 읽은 코딩 에이전트가 |
@@ -53,7 +53,7 @@
 
 ## 두뇌와 손발
 
-honeytoken-mcp는 **LLM을 호출하지 않습니다.** 이미 쓰고 있는 모델이 두뇌이고, 이 도구는 정확해야 하는 부분만
+Honeytokens as Code는 **LLM을 호출하지 않습니다.** 이미 쓰고 있는 모델이 두뇌이고, 이 도구는 정확해야 하는 부분만
 결정론적으로 처리하는 작은 손발입니다.
 
 ```mermaid
@@ -122,7 +122,7 @@ CloudTrail로 사용을 감지합니다(권한 없는 IAM 사용자라는 발상
 **1. 설정** (기기당 한 번)
 
 ```bash
-npx honeytoken-mcp init
+npx honeytokens-as-code init
 ```
 
 ```text
@@ -313,7 +313,7 @@ src/
 웹훅 경로가 Web 표준 함수 하나라서, 엣지로 옮기는 건 재작성이 아니라 어댑터 작성입니다.
 
 ```ts
-import { handle, type Trap } from 'honeytoken-mcp/core';
+import { handle, type Trap } from 'honeytokens-as-code/core';
 
 export default {
   fetch: (req: Request, env: { TRAPS: KVNamespace }) =>
@@ -327,9 +327,9 @@ export default {
 
 | 진입점 | 용도 |
 |---|---|
-| `honeytoken-mcp/core` | `handle`, `generateWebhookTrap`, `trapsIn`, `formatAlert`, `PROVIDER_PREFIXES`와 타입. Node API 없음 |
-| `honeytoken-mcp/notify` | `slack`, `discord`, `createDispatcher`(쿨다운), `notifiersFromEnv` |
-| `honeytoken-mcp` | `createService()`: CLI와 MCP 서버가 쓰는 바로 그 API |
+| `honeytokens-as-code/core` | `handle`, `generateWebhookTrap`, `trapsIn`, `formatAlert`, `PROVIDER_PREFIXES`와 타입. Node API 없음 |
+| `honeytokens-as-code/notify` | `slack`, `discord`, `createDispatcher`(쿨다운), `notifiersFromEnv` |
+| `honeytokens-as-code` | `createService()`: CLI와 MCP 서버가 쓰는 바로 그 API |
 
 <br>
 
@@ -487,7 +487,7 @@ global: --home <path>        (env HONEYTOKEN_HOME, default ~/.honeytoken)
 - [ ] GCP, Azure 자격 증명 카나리
 - [ ] Cloudflare Worker 어댑터 (`core`는 이미 그대로 돌아감)
 - [ ] DNS 트랩
-- [ ] npm 배포 (`npx honeytoken-mcp`)
+- [ ] npm 배포 (`npx honeytokens-as-code`)
 - [ ] 범용 웹훅, PagerDuty 전달
 
 <br>
@@ -522,7 +522,7 @@ npm run typecheck    # 소스와 테스트 모두
 <br>
 
 <div align="center">
-<sub>MIT 라이선스. <code>honeytoken-mcp</code>는 가칭입니다.</sub>
+<sub>MIT 라이선스.</sub>
 <br><br>
 <img src="https://img.shields.io/badge/-%EB%AF%B8%EB%81%BC%EB%8A%94%20%EA%B7%B8%EB%8C%80%EB%A1%9C%20%EB%91%90%EC%84%B8%EC%9A%94-0A0C10?style=flat-square&labelColor=F5A524" alt="">
 </div>

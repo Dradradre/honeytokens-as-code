@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="honeytoken-mcp: your coding agent plants the bait, you get the alert when someone bites" width="100%">
+<img src="assets/banner.svg" alt="Honeytokens as Code: your coding agent plants the bait, you get the alert when someone bites" width="100%">
 
 <br>
 
@@ -37,11 +37,11 @@ Honeytokens turn that grep against them: credentials that do nothing except tell
 using them. The idea is old. The problem has always been the planting.
 
 > **Not to be confused with** the many 2026 tools that plant canaries to catch a *misbehaving AI agent*
-> (prompt injection, exfiltration). honeytoken-mcp points the other way: the agent is on your side, and the
+> (prompt injection, exfiltration). Honeytokens as Code points the other way: the agent is on your side, and the
 > canaries are for whoever steals your repo, your CI or your laptop.
 
 
-| | Classic canary tokens | honeytoken-mcp |
+| | Classic canary tokens | Honeytokens as Code |
 |---|---|---|
 | **What the decoy looks like** | The same generic key, pasted in the same place | A real AWS key named like the repo's other service users, or an endpoint and token dressed as one of the repo's own internal services |
 | **Who picks the spot** | You, by hand, in a hurry | Your coding agent, after reading how the repo is wired |
@@ -54,7 +54,7 @@ using them. The idea is old. The problem has always been the planting.
 
 ## The brain and the hands
 
-honeytoken-mcp **never calls an LLM**. The model you already pay for is the brain; this tool is a small,
+Honeytokens as Code **never calls an LLM**. The model you already pay for is the brain; this tool is a small,
 deterministic pair of hands that does only the parts that must be exactly right.
 
 ```mermaid
@@ -126,7 +126,7 @@ idea in 2016), and Thinkst offers URL tokens for everything else.
 **1. Set up** (once per machine)
 
 ```bash
-npx honeytoken-mcp init
+npx honeytokens-as-code init
 ```
 
 ```text
@@ -324,7 +324,7 @@ src/
 The webhook path is one Web-standard function, so moving it to the edge is an adapter, not a rewrite:
 
 ```ts
-import { handle, type Trap } from 'honeytoken-mcp/core';
+import { handle, type Trap } from 'honeytokens-as-code/core';
 
 export default {
   fetch: (req: Request, env: { TRAPS: KVNamespace }) =>
@@ -338,9 +338,9 @@ export default {
 
 | Entry point | For |
 |---|---|
-| `honeytoken-mcp/core` | `handle`, `generateWebhookTrap`, `trapsIn`, `formatAlert`, `PROVIDER_PREFIXES` and the types. No Node APIs. |
-| `honeytoken-mcp/notify` | `slack`, `discord`, `createDispatcher` (cooldown), `notifiersFromEnv` |
-| `honeytoken-mcp` | `createService()`: the same API the CLI and MCP server use |
+| `honeytokens-as-code/core` | `handle`, `generateWebhookTrap`, `trapsIn`, `formatAlert`, `PROVIDER_PREFIXES` and the types. No Node APIs. |
+| `honeytokens-as-code/notify` | `slack`, `discord`, `createDispatcher` (cooldown), `notifiersFromEnv` |
+| `honeytokens-as-code` | `createService()`: the same API the CLI and MCP server use |
 
 <br>
 
@@ -508,7 +508,7 @@ new one starts.
 - [ ] GCP and Azure credential canaries
 - [ ] Cloudflare Worker adapter (`core` already runs there)
 - [ ] DNS traps
-- [ ] `npx honeytoken-mcp` on npm
+- [ ] `npx honeytokens-as-code` on npm
 - [ ] Generic webhook and PagerDuty forwarding
 
 <br>
@@ -544,7 +544,7 @@ The trap design follows public research and vendor documentation:
 <br>
 
 <div align="center">
-<sub>MIT licensed. <code>honeytoken-mcp</code> is a working title.</sub>
+<sub>MIT licensed.</sub>
 <br><br>
 <img src="https://img.shields.io/badge/-leave%20the%20bait%20in%20place-0A0C10?style=flat-square&labelColor=F5A524" alt="">
 </div>
