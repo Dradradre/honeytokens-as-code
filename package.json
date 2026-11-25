@@ -1,6 +1,7 @@
 {
   "name": "honeytokens-as-code",
-  "version": "0.5.2",
+  "mcpName": "io.github.Dradradre/honeytokens-as-code",
+  "version": "0.5.3",
   "description": "Your coding agent plants honeytokens in your repos: real, powerless AWS keys and internal-looking webhook traps, tracked, checked and rotated. Not a canary that watches your agent.",
   "license": "MIT",
   "author": "Dradradre",

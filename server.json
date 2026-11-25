@@ -1,0 +1,42 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Dradradre/honeytokens-as-code",
+  "title": "Honeytokens as Code",
+  "description": "Your coding agent plants honeytokens: real powerless AWS keys and webhook traps, with alerts.",
+  "repository": {
+    "url": "https://github.com/Dradradre/honeytokens-as-code",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/Dradradre/honeytokens-as-code#readme",
+  "version": "0.5.3",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "honeytokens-as-code",
+      "version": "0.5.3",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "HONEYTOKEN_BASE_URL",
+          "description": "Public URL of your alert server, used in webhook traps (default http://127.0.0.1:8787)",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "HONEYTOKEN_HOME",
+          "description": "Data directory for the trap registry and alert log (default ~/.honeytoken)",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
